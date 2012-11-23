@@ -14,25 +14,45 @@ os.chdir(dir_analysis)
 # Purpose: extract a given column from a 2-D list
 # Input: 2-D data list
 # Output: 1-D data list representing the (n_local+1) -th column of the input list
-def column (list_local, n_local):
-    list_transpose = zip (*list_local)
-    return list_transpose [n_local]
+def column (list_input, n_input):
+    list_transpose = zip (*list_input)
+    return list_transpose [n_input]
 
 # Purpose: extract a given column from a 2-D list but omit the top row
 # Input: 2-D data list
 # Output: 1-D data list representing the (n_local+1) -th column of the input list, minus the first entry
-def column_data (list_local, n_local):
-    list1 = column (list_local, n_local)
+def column_data (list_input, n_input):
+    list1 = column (list_input, n_input)
     list2 = list1 [1:]
     return list2
 
 # Purpose: count the number of columns in a 2-D list
 # Input: 2-D data list
 # Output: integer representing the number of columns of the 2-D list
-def num_of_columns (list_local):
-    list_transpose = zip (*list_local)
+def num_of_columns (list_input):
+    list_transpose = zip (*list_input)
     n_local = len (list_transpose)
     return n_local
+
+# Purpose: get the first row in a 2-D list
+# Input: 2-D data list
+# Output: 1-D data list
+def list_titles (list_input):
+    list_output = list_input [0][0:]
+    return list_output
+
+# Purpose: get the column number corresponding to a title
+# Input: 2-D data list
+# Output: integer
+def col_num_title (list_input, string_input):
+    list_1d = list_titles (list_input)
+    n = 0
+    n_final = len (list_1d) - 1
+    while n <= n_final:
+        if (list_1d [n] == string_input):
+            return n
+        n = n + 1
+    return None 
 
 # This defines the class CSVfile (filename).
 # Input: name of csv file
@@ -64,16 +84,32 @@ class Exchange:
         list_stock = file_stock.filelist ()
         return list_stock
 
-    # Purpose: identify the column containing the stock symbol
+    # Purpose: get list of all entries in a column with a given title
     # Input: 2-D data list containing all information in the file
-    # Output: integer
-    # def col_symbol (self):
+    # Output: 1-D data list containing all stock symbols
+    def column_all (self, string_input):
+        list_input = self.data ()
+        list_titles_local = list_titles (list_input)
+        num_col_symbol = col_num_title (list_input, string_input)
+        list_output = column_data (list_input, num_col_symbol)
+        return list_output
         
-        
+    # Purpose: get a list of the symbols for all of the stocks profiled
+    # Input: 2-D data list containing all information in the file
+    # Output: 1-D data list containing all stock symbols
+    def symbol_all (self):
+        list_output = self.column_all ('Symbol')
+        return list_output
+
         
 
 MyExchange = Exchange ('nyse')
 mydata = MyExchange.data ()
-print mydata
-print 
-
+#print mydata
+print list_titles (mydata)
+print column_data (mydata, 0)
+n = col_num_title (list_titles (mydata), 'Symbol')
+print n
+print type (n)
+print MyExchange.column_all ('Symbol')
+print MyExchange.symbol_all
