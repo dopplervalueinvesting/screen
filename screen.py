@@ -54,6 +54,14 @@ def col_num_title (list_input, string_input):
         n = n + 1
     return None 
 
+# Purpose: get the column corresponding to a title
+# Input: 2-D data list
+# Output: 1-D data list
+def col_title (list_input, string_input):
+    col_num_local = col_num_title (list_input, string_input)
+    list_output = column (list_input, col_num_local) 
+    return list_output
+
 # This defines the class CSVfile (filename).
 # Input: name of csv file
 # Output: 2-D list fed by the input file
@@ -98,18 +106,52 @@ class Exchange:
     # Input: 2-D data list containing all information in the file
     # Output: 1-D data list containing all stock symbols
     def symbol_all (self):
-        list_output = self.column_all ('Symbol')
+        list1 = self.data ()
+        list_output = col_title (list1, 'Symbol')
         return list_output
 
-        
+    # Purpose: get a list of the sectors for each stock
+    # Input: 2-D data list containing all information in the file
+    # Output: 1-D data list containing the sectors for each stock
+    def sector_all (self):
+        list1 = self.data ()
+        list_output = col_title (list1, 'Sector')
+        return list_output
 
-MyExchange = Exchange ('nyse')
+    # Purpose: get a list of the industries for each stock
+    # Input: 2-D data list containing all information in the file
+    # Output: 1-D data list containing the industry for each stock
+    def industry_all (self):
+        list1 = self.data ()
+        list_output = col_title (list1, 'industry')
+        return list_output
+
+    # Purpose: get a list of stock symbols that are NOT funds
+    # Inputs: 1-D data lists containing the sector and industry information
+    # Output: 1-D data list consisting of selected stock symbols
+    def symbol_selected (self):
+        list1 = self.sector_all ()
+        list2 = self.industry_all ()
+        list3 = self.symbol_all ()
+        list_output = []
+        n_length = len (list3)
+        n_last = n_length -1
+        n = 0
+        while n <= n_last:
+            if (list1 [n] <> "n/a" ) & (list2 [n] <> "n/a" ):
+                list_output.append (list3 [n])
+            n = n + 1
+        return list_output
+
+MyExchange = Exchange ('nasdaq')
 mydata = MyExchange.data ()
 #print mydata
-print list_titles (mydata)
-print column_data (mydata, 0)
-n = col_num_title (list_titles (mydata), 'Symbol')
-print n
-print type (n)
-print MyExchange.column_all ('Symbol')
-print MyExchange.symbol_all
+#print zip (*mydata)
+#print list_titles (mydata)
+#print column_data (mydata, 0)
+#n = col_num_title (list_titles (mydata), 'Symbol')
+#print n
+#print type (n)
+#print MyExchange.column_all ('Symbol')
+#print col_title (mydata, 'Symbol')
+print MyExchange.symbol_selected ()
