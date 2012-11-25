@@ -185,7 +185,7 @@ num_stocks = len (list_symbols)
 # Getting profile information from Yahoo
 # Getting financial figures from CNBC (more data than Yahoo, capable of handling big loads)
 URL_BASE_YAHOO = 'http://finance.yahoo.com/q/'
-URL_BASE_CNBC = 'http://data.cnbc.com/quotes/'
+URL_BASE_SMARTMONEY = 'http://www.smartmoney.com/quote/'
 LOCAL_BASE = dir_doppler + '/screen-downloads'
 
 # Yahoo Finance URL for profile data
@@ -193,19 +193,22 @@ def url_profile (symbol1):
     url1 = URL_BASE_YAHOO + 'pr?s=' + symbol1 + '+Profile'
     return url1
 
-# CNBC URL for balance sheet data
+# Smart Money URL for balance sheet data
 def url_balancesheet (symbol1):
-    url1 = URL_BASE_CNBC + symbol1 + '/tab/7.1'
+    url1 = URL_BASE_SMARTMONEY + symbol1 
+    url1 = url1 + '/?story=financials&timewindow=1&opt=YB&isFinprint=1&framework.view=smi_emptyView'
     return url1
 
-# CNBC URL for income statement data
+# Smart Money URL for income statement data
 def url_income (symbol1):
-    url1 = URL_BASE_CNBC + symbol1 + '/tab/7.2'
+    url1 = URL_BASE_SMARTMONEY + symbol1
+    url1 = url1 + '/?story=financials&timewindow=1&opt=YI&isFinprint=1&framework.view=smi_emptyView'
     return url1
 
-# CNBC URL for cash flow statement data
+# Smart Money URL for cash flow statement data
 def url_cashflow (symbol1):
-    url1 = URL_BASE_CNBC + symbol1 + '/tab/7.3'
+    url1 = URL_BASE_SMARTMONEY + symbol1
+    url1 = url1 + '/?story=financials&timewindow=1&opt=YC&isFinprint=1&framework.view=smi_emptyView'
     return url1
 
 def local_root (symbol1):
@@ -260,6 +263,7 @@ def download_data (symbol1):
 
     # NOTE: Downloading is bypassed if the file to be replaced is less than 4 days old.  
     # NOTE: Delay is used to avoid overwhelming the servers.
+    print "Downloading data on " + symbol1
 
     # Download profile information
     url = url1
@@ -267,7 +271,7 @@ def download_data (symbol1):
     file_age = age_of_file (file_name)
     if file_age > 3:
         try:
-            print "Downloading profile data from " + url
+            print "Downloading profile data"
             f = urlopen (url)
             local_file = open (file_name, 'w') # Open local file
             local_file.write (f.read())
@@ -286,7 +290,7 @@ def download_data (symbol1):
     file_age = age_of_file (file_name)
     if file_age > 3:
         try:
-            print "Downloading balance sheet data from " + url
+            print "Downloading balance sheet data"
             f = urlopen (url)
             local_file = open (file_name, 'w') # Open local file
             local_file.write (f.read())
@@ -305,7 +309,7 @@ def download_data (symbol1):
     file_age = age_of_file (file_name)
     if file_age > 3:
         try:
-            print "Downloading income statement data from " + url
+            print "Downloading income statement data"
             f = urlopen (url)
             local_file = open (file_name, 'w') # Open local file
             local_file.write (f.read())
@@ -324,7 +328,7 @@ def download_data (symbol1):
     file_age = age_of_file (file_name)
     if file_age > 3:
         try:
-            print "Downloading cash flow data from " + url
+            print "Downloading cash flow data"
             f = urlopen (url)
             local_file = open (file_name, 'w') # Open local file
             local_file.write (f.read())
@@ -336,8 +340,6 @@ def download_data (symbol1):
             print "URL Error:",e.reason , url
     else:
         print "Local file is less than 4 days old - skipping download"
-
-
     
 create_dir (LOCAL_BASE) # Create screen-downloads directory if it does not already exist
 for symbol in list_symbols:
