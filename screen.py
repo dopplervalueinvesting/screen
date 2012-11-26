@@ -5,6 +5,11 @@ import csv
 import datetime
 import urllib2
 import time, random
+import urllib
+import BeautifulSoup
+from BeautifulSoup import BeautifulSoup
+import re
+from HTMLParser import HTMLParser
 
 dir_analysis = os.getcwd()
 os.chdir('..')
@@ -181,6 +186,8 @@ num_stocks = len (list_symbols)
 ############################################################
 # PART 3: For each stock, download the financial data needed
 ############################################################
+# NOTE: Downloading is bypassed if the file to be replaced is less than 4 days old.  
+# NOTE: Delay is used to avoid overwhelming the servers.
 
 # Getting profile information from Yahoo
 # Getting financial figures from CNBC (more data than Yahoo, capable of handling big loads)
@@ -261,8 +268,6 @@ def download_data (symbol1):
     local3 = local_income (symbol1)
     local4 = local_cashflow (symbol1)    
 
-    # NOTE: Downloading is bypassed if the file to be replaced is less than 4 days old.  
-    # NOTE: Delay is used to avoid overwhelming the servers.
     print "Downloading data on " + symbol1
 
     # Download profile information
@@ -342,10 +347,56 @@ def download_data (symbol1):
         print "Local file is less than 4 days old - skipping download"
     
 create_dir (LOCAL_BASE) # Create screen-downloads directory if it does not already exist
+i_stock = 0
+i_stock_max = len (list_symbols)
 for symbol in list_symbols:
     create_dir (local_root (symbol)) # Create directory for stock if it does not already exist
     download_data (symbol)
+    i_stock = i_stock + 1
+    print "Download completion: " + str(i_stock) + '/' + str(i_stock_max)
     
+###############################################################
+# PART 4: For each stock, process the financial data downloaded
+###############################################################
 
-#print list_symbols
-print len (list_symbols)
+# Purpose: Obtain data for a specific line item
+# Inputs: two strings (one of the symbol, one for the title of the line item)
+# Output: list of numbers for the line item
+def list_line (symbol_input, title_input):
+    url_local = local_balancesheet (symbol_input)
+    page = urllib.urlopen (url_local)
+    soup = BeautifulSoup (page)
+    soup_line_item = soup.findAll(text=title_input)[0].parent.parent.parent
+    list_output = soup_line_item.findAll('td') # List of elements
+    list_output = clean_list (list_output)
+    return list_output
+
+# Purpose: Remove the HTML tags, commas, and spaces from an element in a list; used for processing financial data
+# Input: 1-D list of BeautifulSoup.Tag
+# Output: 1-D list of numbers
+def clean_list (list_input):
+    list_output = []
+    n_length = len (list_input)
+    n_last = n_length -1
+    n = 0
+    while n <= n_last:
+        item_tag = list_input [n]
+        item_string = str (item_tag) # Convert from type BeautifulSoup.Tag to type string
+        item_string = re.sub('<[^<]+?>', '', item_string) # Eliminate HTML tags
+        item_string = item_string.replace (' ', '') # Eliminate spaces
+        item_string = item_string.replace (',', '') # Eliminate commas
+        try:
+            item_float = float (item_string)
+        except:
+            item_float = None
+        list_output.append (item_float)
+        n = n + 1            
+    return list_output
+
+for symbol in list_symbols:
+    line_cash = list_line (symbol, "Cash & Short Term Investments")
+
+    print "*****************"    
+    print line_cash
+    print "*****************"
+
