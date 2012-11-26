@@ -1,5 +1,20 @@
 #! /usr/bin/python
 
+# Welcome to the Dopeler Value Investing pre-screening tool.
+# Yes, the name Dopeler is inspired by the movie _Snow Day_.
+
+# Dopeler Value Investing only a pre-screening tool to identify the stocks that appear to be most promising.
+# This is NOT a replacement for the more detailed Doppler Value Investing analysis.
+# The purpose of Dopeler Value Investing is to quickly process financial information on thousands of stocks.
+# Stocks that are clearly incompatible with the Doppler Value Investing philosophy can be quickly screened out.
+# Attention can be focused on the most promising stocks.
+
+# Please note that not all stocks that look attractive in the Dopeler Value Investing screen are suitable.
+# Some may be beneficiaries of the high point in the industry cycle.
+# Some may be the beneficiaries of a temporary fad.
+# In addition, there may be other problems with some of these stocks.
+
+import sys
 import os
 import csv
 import datetime
@@ -163,23 +178,23 @@ class Exchange:
 # PART 2: Using Exchange.symbol_selected, compile the list of ticker symbols from the AMEX, NYSE, and NASDAQ exchanges.
 #######################################################################################################################
 
-# Exchange_amex = Exchange ('amex')
-# Exchange_nyse = Exchange ('nyse')
-# Exchange_nasdaq = Exchange ('nasdaq')
-Exchange_test = Exchange ('test')
-# list_amex = Exchange_amex.symbol_selected ()
-# list_nyse = Exchange_nyse.symbol_selected ()
-# list_nasdaq = Exchange_nasdaq.symbol_selected ()
-list_test = Exchange_test.symbol_selected ()
+Exchange_amex = Exchange ('amex')
+Exchange_nyse = Exchange ('nyse')
+Exchange_nasdaq = Exchange ('nasdaq')
+# Exchange_test = Exchange ('test')
+list_amex = Exchange_amex.symbol_selected ()
+list_nyse = Exchange_nyse.symbol_selected ()
+list_nasdaq = Exchange_nasdaq.symbol_selected ()
+# list_test = Exchange_test.symbol_selected ()
 list_symbols = []
-# for item in list_amex:
-    # list_symbols.append (item)
-# for item in list_nyse:
-    # list_symbols.append (item)
-# for item in list_nasdaq:
-    # list_symbols.append (item)
-for item in list_test:
+for item in list_amex:
     list_symbols.append (item)
+for item in list_nyse:
+    list_symbols.append (item)
+for item in list_nasdaq:
+    list_symbols.append (item)
+# for item in list_test:
+    # list_symbols.append (item)
 
 num_stocks = len (list_symbols)
 
@@ -359,11 +374,35 @@ for symbol in list_symbols:
 # PART 4: For each stock, process the financial data downloaded
 ###############################################################
 
-# Purpose: Obtain data for a specific line item
+# Purpose: Obtain data for a specific line item on the balance sheet
 # Inputs: two strings (one of the symbol, one for the title of the line item)
 # Output: list of numbers for the line item
-def list_line (symbol_input, title_input):
+def list_line_balance (symbol_input, title_input):
     url_local = local_balancesheet (symbol_input)
+    page = urllib.urlopen (url_local)
+    soup = BeautifulSoup (page)
+    soup_line_item = soup.findAll(text=title_input)[0].parent.parent.parent
+    list_output = soup_line_item.findAll('td') # List of elements
+    list_output = clean_list (list_output)
+    return list_output
+
+# Purpose: Obtain data for a specific line item on the cash flow statement
+# Inputs: two strings (one of the symbol, one for the title of the line item)
+# Output: list of numbers for the line item
+def list_line_cashflow (symbol_input, title_input):
+    url_local = local_cashflow (symbol_input)
+    page = urllib.urlopen (url_local)
+    soup = BeautifulSoup (page)
+    soup_line_item = soup.findAll(text=title_input)[0].parent.parent.parent
+    list_output = soup_line_item.findAll('td') # List of elements
+    list_output = clean_list (list_output)
+    return list_output
+
+# Purpose: Obtain data for a specific line item on the income statement
+# Inputs: two strings (one of the symbol, one for the title of the line item)
+# Output: list of numbers for the line item
+def list_line_income (symbol_input, title_input):
+    url_local = local_income (symbol_input)
     page = urllib.urlopen (url_local)
     soup = BeautifulSoup (page)
     soup_line_item = soup.findAll(text=title_input)[0].parent.parent.parent
@@ -394,9 +433,44 @@ def clean_list (list_input):
     return list_output
 
 for symbol in list_symbols:
-    line_cash = list_line (symbol, "Cash & Short Term Investments")
+    line_cash = list_line_balance (symbol, "Cash & Short Term Investments")
+    line_ppe = list_line_balance (symbol, "Property, Plant & Equipment - Gross")
+    line_liab = list_line_balance (symbol, "Total Liabilities")
+    line_ps = list_line_balance (symbol, "Preferred Stock (Carrying Value)")
 
-    print "*****************"    
-    print line_cash
-    print "*****************"
+    line_cfo = list_line_cashflow (symbol, "Net Operating Cash Flow")
+    
+    line_tax = list_line_income (symbol, "Income Tax")    
+
+    # this year's Dopeler Return On Equity = this year's Dopeler earnings / last year's PPE
+    # Dopeler earnings = pre-tax free cash flow
+    # last year's PPE (at end of year) = PPE at the start of this year
+    # this year's pre-tax free cash flow = This year's after-tax free cash flow + this year's income taxes
+    # this year's after-tax free cash flow = this year's after-tax cash flow - this year's normalized capital spending
+    # ASSUMPTION: this year's normalized capital spending = 10% of last year's PPE (at cost)
+    # after-tax cash flow = official cash flow from operations
+    # THUS:
+    # this year's Dopeler earnings = this year's official cash flow from operations + this year's income taxes
+    # - .1 * last year's PPE
+    try:
+        
+        roe0 = (line_cfo [0] + line_tax [0] - .1 * line_ppe[1]) / line_ppe [1]
+        roe1 = (line_cfo [1] + line_tax [1] - .1 * line_ppe[2]) / line_ppe [2]
+        roe2 = (line_cfo [2] + line_tax [2] - .1 * line_ppe[3]) / line_ppe [3]
+        roe_local = (roe0 + roe1 + roe2) / 3
+    except:
+        roe_local = None
+
+
+    print symbol, roe_local
+    # print "*****************"    
+    # print line_cash
+    # print line_ppe
+    # print line_liab
+    # print line_ps
+
+    # print line_cfo
+
+    # print line_tax
+    # print "*****************"
 
