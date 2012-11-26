@@ -232,6 +232,7 @@ class Exchange:
             i_select = list1 [n]
             symbol1 = list2 [i_select]
             symbol1 = symbol1.replace (' ', '') # Eliminate spaces
+            symbol1 = symbol1.replace ('/', '.') # Replace slash with period
             list_output.append (symbol1) 
             n = n + 1
         return list_output
@@ -467,7 +468,7 @@ def download_data (symbol1):
             local_file = open (file_name, 'w') # Open local file
             local_file.write (f.read())
             local_file.close ()
-            time.sleep (random.uniform (.1, .9))
+            time.sleep (random.uniform (.1, .5))
         except HTTPError, e:
             print "HTTP Error:",e.code , url
         except URLError, e:
@@ -486,7 +487,7 @@ def download_data (symbol1):
             local_file = open (file_name, 'w') # Open local file
             local_file.write (f.read())
             local_file.close ()
-            time.sleep (random.uniform (.1, .9))
+            time.sleep (random.uniform (.1, .5))
         except HTTPError, e:
             print "HTTP Error:",e.code , url
         except URLError, e:
@@ -505,7 +506,7 @@ def download_data (symbol1):
             local_file = open (file_name, 'w') # Open local file
             local_file.write (f.read())
             local_file.close ()
-            time.sleep (random.uniform (.1, .9))
+            time.sleep (random.uniform (.1, .5))
         except HTTPError, e:
             print "HTTP Error:",e.code , url
         except URLError, e:
@@ -516,11 +517,19 @@ def download_data (symbol1):
 create_dir (LOCAL_BASE) # Create screen-downloads directory if it does not already exist
 i_stock = 0
 i_stock_max = len (list_symbol)
+start = time.time ()
 for symbol in list_symbol:
     create_dir (local_root (symbol)) # Create directory for stock if it does not already exist
     download_data (symbol)
     i_stock = i_stock + 1
-    print "Download completion: " + str(i_stock) + '/' + str(i_stock_max)
+
+    now = time.time ()
+    t_elapsed = now - start
+    rate_s = i_stock / t_elapsed # Stocks/second
+    remain_s = (i_stock_max - i_stock)/rate_s
+    remain_m = round (remain_s/60)
+    print "Download completion: " + str(i_stock) + '/' + str(i_stock_max) + "; " + str(remain_m) + " minutes remaining"
+
     
 ###############################################################
 # PART 4: For each stock, process the financial data downloaded
