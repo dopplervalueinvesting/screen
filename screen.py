@@ -82,11 +82,21 @@ def col_num_title (list_input, string_input):
 
 # Purpose: get the column corresponding to a title
 # Input: 2-D data list
-# Output: 1-D data list
+# Output: 1-D data list of strings
 def col_title (list_input, string_input):
     col_num_local = col_num_title (list_input, string_input)
     list_output = column_data (list_input, col_num_local) 
     return list_output
+
+# Purpose: Convert a string to a floating point number
+# Input: string
+# Output: floating point number
+def str_to_float (string_input):
+    try:
+        x = float (string_input)
+    except:
+        x = None
+    return x
 
 # This defines the class CSVfile (filename).
 # Input: name of csv file
@@ -120,7 +130,7 @@ class Exchange:
 
     # Purpose: get list of all entries in a column with a given title
     # Input: 2-D data list containing all information in the file
-    # Output: 1-D data list containing all stock symbols
+    # Output: 1-D data list
     def column_all (self, string_input):
         list_input = self.data ()
         list_titles_local = list_titles (list_input)
@@ -130,7 +140,7 @@ class Exchange:
         
     # Purpose: get a list of the symbols for all of the stocks profiled
     # Input: 2-D data list containing all information in the file
-    # Output: 1-D data list containing all stock symbols
+    # Output: 1-D data list
     def symbol_all (self):
         list1 = self.data ()
         list_output = col_title (list1, 'Symbol')
@@ -138,7 +148,7 @@ class Exchange:
 
     # Purpose: get a list of the sectors for each stock
     # Input: 2-D data list containing all information in the file
-    # Output: 1-D data list containing the sectors for each stock
+    # Output: 1-D data list
     def sector_all (self):
         list1 = self.data ()
         list_output = col_title (list1, 'Sector')
@@ -146,57 +156,231 @@ class Exchange:
 
     # Purpose: get a list of the industries for each stock
     # Input: 2-D data list containing all information in the file
-    # Output: 1-D data list containing the industry for each stock
+    # Output: 1-D data list
     def industry_all (self):
         list1 = self.data ()
         list_output = col_title (list1, 'industry')
         return list_output
 
-    # Purpose: get a list of stock symbols that are NOT funds
-    # Inputs: 1-D data lists containing the sector and industry information
-    # Output: 1-D data list consisting of selected stock symbols
-    def symbol_selected (self):
+    # Purpose: get a list of the names for each stock
+    # Input: 2-D data list containing all information in the file
+    # Output: 1-D data list
+    def name_all (self):
+        list1 = self.data ()
+        list_output = col_title (list1, 'Name')
+        return list_output
+
+    # Purpose: get a list of the prices for each stock
+    # Input: 2-D data list containing all information in the file
+    # Output: 1-D data list
+    def price_all (self):
+        list1 = self.data ()
+        list_output = col_title (list1, 'LastSale')
+        return list_output
+
+    # Purpose: get a list of the market caps for each stock
+    # Input: 2-D data list containing all information in the file
+    # Output: 1-D data list
+    def marketcap_all (self):
+        list1 = self.data ()
+        list_output = col_title (list1, 'MarketCap')
+        return list_output
+
+    # Purpose: get a list of the index number for each stock
+    # Input: 2-D data list containing all information in the file
+    # Output: 1-D data list
+    def index_all (self):
+        list1 = self.data ()
+        n_length = len (list1)
+        n_last = n_length -1
+        n = 0
+        list_output = []
+        while n <= n_last:
+            list_output.append (n)
+            n = n + 1
+        return list_output
+
+    # Purpose: get a list of the index numbers for each stock that is NOT a fund
+    # Inputs: 1-D data lists 
+    # Output: 1-D data list
+    def index_selected (self):
         list1 = self.sector_all ()
         list2 = self.industry_all ()
-        list3 = self.symbol_all ()
+        list3 = self.index_all ()
         list_output = []
-        n_length = len (list3)
+        n_length = len (list1)
+        n_last = n_length -1
+        n = 0
+        list_output = []
+        while n <= n_last:
+            if (list1 [n] <> "n/a" ) & (list2 [n] <> "n/a" ):
+                list_output.append (list3 [n])
+            n = n + 1
+        return list_output
+
+    # Purpose: get a list of the ticker symbols for each stock that is NOT a fund
+    # Inputs: 1-D data lists
+    # Output: 1-D data list 
+    def symbol_selected (self):
+        list1 = self.index_selected ()
+        list2 = self.symbol_all ()
+        list_output = []
+        n_length = len (list1)
         n_last = n_length -1
         n = 0
         while n <= n_last:
-            if (list1 [n] <> "n/a" ) & (list2 [n] <> "n/a" ):
-                string_symbol = list3 [n]
-                string_symbol = string_symbol.replace (' ', '') # Eliminate spaces
-                string_symbol = string_symbol.replace ('^', '') # Eliminate '^' symbol
-                string_symbol = string_symbol.replace ('/', '-') # Replace the '/' symbol due to filename issues
-                # Note that all symbols in which the '^' symbol is not at the end belong to funds (screened out)
-                list_output.append (string_symbol)
+            i_select = list1 [n]
+            symbol1 = list2 [i_select]
+            symbol1 = symbol1.replace (' ', '') # Eliminate spaces
+            list_output.append (symbol1) 
+            n = n + 1
+        return list_output
+
+    # Purpose: get a list of the names of each stock that is NOT a fund
+    # Inputs: 1-D data lists
+    # Output: 1-D data list
+    def name_selected (self):
+        list1 = self.index_selected ()
+        list2 = self.name_all ()
+        list_output = []
+        n_length = len (list1)
+        n_last = n_length -1
+        n = 0
+        while n <= n_last:
+            i_select = list1 [n]
+            name1 = list2 [i_select]
+            list_output.append (name1) 
+            n = n + 1
+        return list_output
+
+    # Purpose: get a list of the prices of each stock that is NOT a fund
+    # Inputs: 1-D data lists
+    # Output: 1-D data list of numbers
+    def price_selected (self):
+        list1 = self.index_selected ()
+        list2 = self.price_all ()
+        list_output = []
+        n_length = len (list1)
+        n_last = n_length -1
+        n = 0
+        while n <= n_last:
+            i_select = list1 [n]
+            price_str = list2 [i_select]
+            price_num = str_to_float (price_str)
+            list_output.append (price_num) 
+            n = n + 1
+        return list_output
+
+    # Purpose: get a list of the market caps of each stock that is NOT a fund
+    # Inputs: 1-D data lists
+    # Output: 1-D data list of numbers
+    def marketcap_selected (self):
+        list1 = self.index_selected ()
+        list2 = self.marketcap_all ()
+        list_output = []
+        n_length = len (list1)
+        n_last = n_length -1
+        n = 0
+        while n <= n_last:
+            i_select = list1 [n]
+            marketcap_str = list2 [i_select]
+            marketcap_num = str_to_float (marketcap_str)
+            list_output.append (marketcap_num) 
+            n = n + 1
+        return list_output
+
+    # Purpose: get a list of the number of shares outstanding for each stock that is NOT a fund
+    # Inputs: 1-D data lists
+    # Output: 1-D data list of numbers
+    def nshares_selected (self):
+        list1 = self.marketcap_selected ()
+        list2 = self.price_selected ()
+        list_output = []
+        n_length = len (list1)
+        n_last = n_length -1
+        n = 0
+        while n <= n_last:
+            marketcap1 = list1 [n]
+            price1 = list2 [n]
+            try:
+                nshares1 = round(marketcap1/price1)
+            except:
+                nshares1 = None
+            list_output.append (nshares1) 
+            n = n + 1
+        return list_output
+
+    # Purpose: get a list of the sectors of each stock that is NOT a fund
+    # Inputs: 1-D data lists
+    # Output: 1-D data list
+    def sector_selected (self):
+        list1 = self.index_selected ()
+        list2 = self.sector_all ()
+        list_output = []
+        n_length = len (list1)
+        n_last = n_length -1
+        n = 0
+        while n <= n_last:
+            i_select = list1 [n]
+            sector1 = list2 [i_select]
+            list_output.append (sector1) 
+            n = n + 1
+        return list_output
+
+    # Purpose: get a list of the industries of each stock that is NOT a fund
+    # Inputs: 1-D data lists
+    # Output: 1-D data list
+    def industry_selected (self):
+        list1 = self.index_selected ()
+        list2 = self.industry_all ()
+        list_output = []
+        n_length = len (list1)
+        n_last = n_length -1
+        n = 0
+        while n <= n_last:
+            i_select = list1 [n]
+            industry1 = list2 [i_select]
+            list_output.append (industry1) 
             n = n + 1
         return list_output
 
 #######################################################################################################################
 # PART 2: Using Exchange.symbol_selected, compile the list of ticker symbols from the AMEX, NYSE, and NASDAQ exchanges.
 #######################################################################################################################
+print "******************************"
+print "BEGIN acquiring list of stocks"
 
-Exchange_amex = Exchange ('amex')
-Exchange_nyse = Exchange ('nyse')
-Exchange_nasdaq = Exchange ('nasdaq')
-# Exchange_test = Exchange ('test')
-list_amex = Exchange_amex.symbol_selected ()
-list_nyse = Exchange_nyse.symbol_selected ()
-list_nasdaq = Exchange_nasdaq.symbol_selected ()
-# list_test = Exchange_test.symbol_selected ()
-list_symbols = []
-for item in list_amex:
-    list_symbols.append (item)
-for item in list_nyse:
-    list_symbols.append (item)
-for item in list_nasdaq:
-    list_symbols.append (item)
-# for item in list_test:
-    # list_symbols.append (item)
+# BEGIN: this section is for testing purposes
 
-num_stocks = len (list_symbols)
+Exchange1 = Exchange ('test')
+list_symbol = Exchange1.symbol_selected ()
+list_name = Exchange1.name_selected ()
+list_price = Exchange1.price_selected ()
+list_nshares = Exchange1.nshares_selected ()
+list_sector = Exchange1.sector_selected ()
+list_industry = Exchange1.industry_selected ()
+
+# END: this section is for testing purposes
+
+# BEGIN: enable this section for analyzing all AMEX, NYSE, and NASDAQ stocks
+
+Exchange1 = Exchange ('amex')
+Exchange2 = Exchange ('nyse')
+Exchange3 = Exchange ('nasdaq')
+
+list_symbol = Exchange1.symbol_selected () + Exchange2.symbol_selected () + Exchange3.symbol_selected ()
+list_name = Exchange1.name_selected () + Exchange2.name_selected () + Exchange3.name_selected ()
+list_price = Exchange1.price_selected () + Exchange2.price_selected () + Exchange3.price_selected ()
+list_nshares = Exchange1.nshares_selected () + Exchange2.nshares_selected () + Exchange3.nshares_selected ()
+list_sector = Exchange1.sector_selected () + Exchange2.sector_selected () + Exchange3.sector_selected ()
+list_industry = Exchange1.industry_selected () + Exchange2.industry_selected () + Exchange3.industry_selected ()
+
+# END: enable this section for analyzing all AMEX, NYSE, and NASDAQ stocks
+
+num_stocks = len (list_symbol)
+print "Total number of stocks: " + str(num_stocks)
+print "FINISHED acquiring list of stocks"
+print "*********************************"
 
 ############################################################
 # PART 3: For each stock, download the financial data needed
@@ -204,16 +388,9 @@ num_stocks = len (list_symbols)
 # NOTE: Downloading is bypassed if the file to be replaced is less than 4 days old.  
 # NOTE: Delay is used to avoid overwhelming the servers.
 
-# Getting profile information from Yahoo
 # Getting financial figures from CNBC (more data than Yahoo, capable of handling big loads)
-URL_BASE_YAHOO = 'http://finance.yahoo.com/q/'
 URL_BASE_SMARTMONEY = 'http://www.smartmoney.com/quote/'
 LOCAL_BASE = dir_doppler + '/screen-downloads'
-
-# Yahoo Finance URL for profile data
-def url_profile (symbol1):
-    url1 = URL_BASE_YAHOO + 'pr?s=' + symbol1 + '+Profile'
-    return url1
 
 # Smart Money URL for balance sheet data
 def url_balancesheet (symbol1):
@@ -235,10 +412,6 @@ def url_cashflow (symbol1):
 
 def local_root (symbol1):
     url1 = LOCAL_BASE + '/' + symbol1
-    return url1
-
-def local_profile (symbol1):
-    url1 = local_root (symbol1) + '/profile.html'
     return url1
 
 def local_balancesheet (symbol1):
@@ -274,39 +447,18 @@ def age_of_file (file1): # In days
 # Download information on a given stock
 def download_data (symbol1):
     from urllib2 import Request, urlopen, URLError, HTTPError
-    url1 = url_profile (symbol1)
-    url2 = url_balancesheet (symbol1)
-    url3 = url_income (symbol1)
-    url4 = url_cashflow (symbol1)
-    local1 = local_profile (symbol1)
-    local2 = local_balancesheet (symbol1)
-    local3 = local_income (symbol1)
-    local4 = local_cashflow (symbol1)    
+    url1 = url_balancesheet (symbol1)
+    url2 = url_income (symbol1)
+    url3 = url_cashflow (symbol1)
+    local1 = local_balancesheet (symbol1)
+    local2 = local_income (symbol1)
+    local3 = local_cashflow (symbol1)    
 
     print "Downloading data on " + symbol1
 
-    # Download profile information
+    # Download balance sheet information
     url = url1
     file_name = local1
-    file_age = age_of_file (file_name)
-    if file_age > 3:
-        try:
-            print "Downloading profile data"
-            f = urlopen (url)
-            local_file = open (file_name, 'w') # Open local file
-            local_file.write (f.read())
-            local_file.close ()
-            time.sleep (random.uniform (.1, .9)) # Delay
-        except HTTPError, e:
-            print "HTTP Error:",e.code , url
-        except URLError, e:
-            print "URL Error:",e.reason , url
-    else:
-        print "Local file is less than 4 days old - skipping download"
-
-    # Download balance sheet information
-    url = url2
-    file_name = local2
     file_age = age_of_file (file_name)
     if file_age > 3:
         try:
@@ -324,8 +476,8 @@ def download_data (symbol1):
         print "Local file is less than 4 days old - skipping download"
 
     # Download income information
-    url = url3
-    file_name = local3
+    url = url2
+    file_name = local2
     file_age = age_of_file (file_name)
     if file_age > 3:
         try:
@@ -343,8 +495,8 @@ def download_data (symbol1):
         print "Local file is less than 4 days old - skipping download"
 
     # Download cash flow information
-    url = url4
-    file_name = local4
+    url = url3
+    file_name = local3
     file_age = age_of_file (file_name)
     if file_age > 3:
         try:
@@ -363,8 +515,8 @@ def download_data (symbol1):
     
 create_dir (LOCAL_BASE) # Create screen-downloads directory if it does not already exist
 i_stock = 0
-i_stock_max = len (list_symbols)
-for symbol in list_symbols:
+i_stock_max = len (list_symbol)
+for symbol in list_symbol:
     create_dir (local_root (symbol)) # Create directory for stock if it does not already exist
     download_data (symbol)
     i_stock = i_stock + 1
@@ -424,15 +576,12 @@ def clean_list (list_input):
         item_string = re.sub('<[^<]+?>', '', item_string) # Eliminate HTML tags
         item_string = item_string.replace (' ', '') # Eliminate spaces
         item_string = item_string.replace (',', '') # Eliminate commas
-        try:
-            item_float = float (item_string)
-        except:
-            item_float = None
+        item_float = str_to_float (item_string)
         list_output.append (item_float)
         n = n + 1            
     return list_output
 
-for symbol in list_symbols:
+for symbol in list_symbol:
     line_cash = list_line_balance (symbol, "Cash & Short Term Investments")
     line_ppe = list_line_balance (symbol, "Property, Plant & Equipment - Gross")
     line_liab = list_line_balance (symbol, "Total Liabilities")
@@ -442,8 +591,8 @@ for symbol in list_symbols:
     
     line_tax = list_line_income (symbol, "Income Tax")    
 
-    # this year's Dopeler Return On Equity = this year's Dopeler earnings / last year's PPE
-    # Dopeler earnings = pre-tax free cash flow
+    #nshares = 
+
     # last year's PPE (at end of year) = PPE at the start of this year
     # this year's pre-tax free cash flow = This year's after-tax free cash flow + this year's income taxes
     # this year's after-tax free cash flow = this year's after-tax cash flow - this year's normalized capital spending
@@ -452,8 +601,8 @@ for symbol in list_symbols:
     # THUS:
     # this year's Dopeler earnings = this year's official cash flow from operations + this year's income taxes
     # - .1 * last year's PPE
+    # this year's Dopeler Return On Equity = this year's Dopeler earnings / last year's PPE
     try:
-        
         roe0 = (line_cfo [0] + line_tax [0] - .1 * line_ppe[1]) / line_ppe [1]
         roe1 = (line_cfo [1] + line_tax [1] - .1 * line_ppe[2]) / line_ppe [2]
         roe2 = (line_cfo [2] + line_tax [2] - .1 * line_ppe[3]) / line_ppe [3]
