@@ -527,7 +527,7 @@ for symbol in list_symbol:
     t_elapsed = now - start
     rate_s = i_stock / t_elapsed # Stocks/second
     remain_s = (i_stock_max - i_stock)/rate_s
-    remain_m = round (remain_s/60)
+    remain_m = int (round(remain_s/60))
     print "Download completion: " + str(i_stock) + '/' + str(i_stock_max) + "; " + str(remain_m) + " minutes remaining"
 
     
