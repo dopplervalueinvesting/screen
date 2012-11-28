@@ -20,7 +20,7 @@ import csv
 import datetime
 import urllib2
 import time, random
-import urllib
+import socket
 import BeautifulSoup
 from BeautifulSoup import BeautifulSoup
 import re
@@ -435,19 +435,69 @@ def create_dir (path1):
 # Get age of file
 # Based on solution at 
 # http://stackoverflow.com/questions/5799070/how-to-see-if-file-is-older-than-3-months-in-python
-# Returns 1000000 if the file does not exist
+# Returns a billion if the file does not exist
 def age_of_file (file1): # In days
     today = datetime.datetime.now ()
     try:
         modified_date = datetime.datetime.fromtimestamp(os.path.getmtime(file1))
         age = today - modified_date
-        return age.days
+        return age.seconds
     except:
-        return 1000000
+        return 1000000000
+
+class TimeoutException(Exception): 
+    pass
+
+def timeout_handler(signum, frame):
+    raise TimeoutException()
+
+# Download a page from a url and save it, just the basics
+# Download a page from a url and save it, includes conditions
+# Only download if the existing page is more than 3 days old.
+# If the download is not successful, make up to 5 additional attempts.
+# Inputs: URL of source, path of destination
+# Times out after 10 seconds
+def download_page (url, file_name):
+    from urllib2 import Request, urlopen, URLError, HTTPError
+    file_age = age_of_file (file_name) # In seconds
+    file_size = 0
+    try:
+        file_size = os.path.getsize (file_name)
+    except:
+        file_size = 0
+    file_age_max_hours = 96
+    file_age_max_seconds = file_age_max_hours * 3600
+    n_fail = 0
+    n_fail_max = 2
+    while ((file_age > file_age_max_seconds or file_size == 0) and n_fail <= n_fail_max):
+        try:
+            signal.signal(signal.SIGALRM, timeout_handler) 
+            signal.alarm (10) # Trigger alarm in 10 seconds
+            f = urllib2.urlopen (url)
+            local_file = open (file_name, 'w') # Open local file
+            local_file.write (f.read())
+            local_file.close ()
+            signal.alarm(0) # Disable the alarm
+            time.sleep (random.uniform (.1, .5)) # Delay is needed to limit the impact on the upstream server
+        except urllib2.HTTPError, e:
+            n_fail = n_fail + 1
+            print "Failure #: " + str (n_fail)
+            print "HTTP Error:",e.code , url
+        except urllib2.URLError, e:
+            n_fail = n_fail + 1
+            print "Failure #: " + str (n_fail)
+            print "URL Error:",e.reason , url
+        except:
+            n_fail = n_fail + 1
+            print "Failure #: " + str (n_fail)
+            print "Other error"
+    if n_fail > n_fail_max:
+        print "Download failed, giving up"
+    if file_age <= file_age_max_seconds and file_size > 0:
+        print "Local file is new enough - skipping download"
 
 # Download information on a given stock
-def download_data (symbol1):
-    from urllib2 import Request, urlopen, URLError, HTTPError
+def download_data_stock (symbol1):
     url1 = url_balancesheet (symbol1)
     url2 = url_income (symbol1)
     url3 = url_cashflow (symbol1)
@@ -456,63 +506,15 @@ def download_data (symbol1):
     local3 = local_cashflow (symbol1)    
 
     print "Downloading data on " + symbol1
+    print "Downloading balance sheet data"
+    download_page (url1, local1)
 
-    # Download balance sheet information
-    url = url1
-    file_name = local1
-    file_age = age_of_file (file_name)
-    if file_age > 3:
-        try:
-            print "Downloading balance sheet data"
-            f = urlopen (url)
-            local_file = open (file_name, 'w') # Open local file
-            local_file.write (f.read())
-            local_file.close ()
-            time.sleep (random.uniform (.1, .5))
-        except HTTPError, e:
-            print "HTTP Error:",e.code , url
-        except URLError, e:
-            print "URL Error:",e.reason , url
-    else:
-        print "Local file is less than 4 days old - skipping download"
+    print "Downloading income statement data"
+    download_page (url2, local2)
 
-    # Download income information
-    url = url2
-    file_name = local2
-    file_age = age_of_file (file_name)
-    if file_age > 3:
-        try:
-            print "Downloading income statement data"
-            f = urlopen (url)
-            local_file = open (file_name, 'w') # Open local file
-            local_file.write (f.read())
-            local_file.close ()
-            time.sleep (random.uniform (.1, .5))
-        except HTTPError, e:
-            print "HTTP Error:",e.code , url
-        except URLError, e:
-            print "URL Error:",e.reason , url
-    else:
-        print "Local file is less than 4 days old - skipping download"
+    print "Downloading cash flow data"
+    download_page (url3, local3)
 
-    # Download cash flow information
-    url = url3
-    file_name = local3
-    file_age = age_of_file (file_name)
-    if file_age > 3:
-        try:
-            print "Downloading cash flow data"
-            f = urlopen (url)
-            local_file = open (file_name, 'w') # Open local file
-            local_file.write (f.read())
-            local_file.close ()
-            time.sleep (random.uniform (.1, .5))
-        except HTTPError, e:
-            print "HTTP Error:",e.code , url
-        except URLError, e:
-            print "URL Error:",e.reason , url
-    else:
-        print "Local file is less than 4 days old - skipping download"
     
 create_dir (LOCAL_BASE) # Create screen-downloads directory if it does not already exist
 i_stock = 0
@@ -520,7 +522,7 @@ i_stock_max = len (list_symbol)
 start = time.time ()
 for symbol in list_symbol:
     create_dir (local_root (symbol)) # Create directory for stock if it does not already exist
-    download_data (symbol)
+    download_data_stock (symbol)
     i_stock = i_stock + 1
 
     now = time.time ()
@@ -540,7 +542,8 @@ for symbol in list_symbol:
 # Output: list of numbers for the line item
 def list_line_balance (symbol_input, title_input):
     url_local = local_balancesheet (symbol_input)
-    page = urllib.urlopen (url_local)
+    url_local = "file://" + url_local
+    page = urllib2.urlopen (url_local)
     soup = BeautifulSoup (page)
     soup_line_item = soup.findAll(text=title_input)[0].parent.parent.parent
     list_output = soup_line_item.findAll('td') # List of elements
@@ -552,7 +555,8 @@ def list_line_balance (symbol_input, title_input):
 # Output: list of numbers for the line item
 def list_line_cashflow (symbol_input, title_input):
     url_local = local_cashflow (symbol_input)
-    page = urllib.urlopen (url_local)
+    url_local = "file://" + url_local
+    page = urllib2.urlopen (url_local)
     soup = BeautifulSoup (page)
     soup_line_item = soup.findAll(text=title_input)[0].parent.parent.parent
     list_output = soup_line_item.findAll('td') # List of elements
@@ -564,7 +568,8 @@ def list_line_cashflow (symbol_input, title_input):
 # Output: list of numbers for the line item
 def list_line_income (symbol_input, title_input):
     url_local = local_income (symbol_input)
-    page = urllib.urlopen (url_local)
+    url_local = "file://" + url_local
+    page = urllib2.urlopen (url_local)
     soup = BeautifulSoup (page)
     soup_line_item = soup.findAll(text=title_input)[0].parent.parent.parent
     list_output = soup_line_item.findAll('td') # List of elements
@@ -590,17 +595,54 @@ def clean_list (list_input):
         n = n + 1            
     return list_output
 
+# Purpose: obtain the numbers for balance sheet line items for a given stock and line item
+# Input: two strings
+# Output: 1-D list of numbers
+def line_balance (symbol, title):
+    try:
+        line_output = list_line_balance (symbol, title)
+        return line_output
+    except:
+        print title + ": not available"
+        return None 
+
+# Purpose: obtain the numbers for cash flow line items for a given stock and line item
+# Input: two strings
+# Output: 1-D list of numbers
+def line_cashflow (symbol, title):
+    try:
+        line_output = list_line_cashflow (symbol, title)
+        return line_output
+    except:
+        print title + ": not available"
+        return None
+
+# Purpose: obtain the numbers for income statement line items for a given stock and line item
+# Input: two strings
+# Output: 1-D list of numbers
+def line_income (symbol, title):
+    try:
+        line_output = list_line_income (symbol, title)
+        return line_output
+    except:
+        print title + ": not available"
+        return None
+
+
 for symbol in list_symbol:
-    line_cash = list_line_balance (symbol, "Cash & Short Term Investments")
-    line_ppe = list_line_balance (symbol, "Property, Plant & Equipment - Gross")
-    line_liab = list_line_balance (symbol, "Total Liabilities")
-    line_ps = list_line_balance (symbol, "Preferred Stock (Carrying Value)")
+    print "Analyzing " + symbol
 
-    line_cfo = list_line_cashflow (symbol, "Net Operating Cash Flow")
+    line_cash = line_balance (symbol, "Cash & Short Term Investments")    
+    line_ppe = line_balance (symbol, "Property, Plant & Equipment - Gross")
+    line_liab = line_balance (symbol, "Total Liabilities")
+    line_ps = line_balance (symbol, "Preferred Stock (Carrying Value)")
     
-    line_tax = list_line_income (symbol, "Income Tax")    
+    line_cfo = line_cashflow (symbol, "Net Operating Cash Flow")
+    
+    line_tax = line_income (symbol, "Income Tax")    
 
-    #nshares = 
+    print "Read downloaded pages"
+    
 
     # last year's PPE (at end of year) = PPE at the start of this year
     # this year's pre-tax free cash flow = This year's after-tax free cash flow + this year's income taxes
@@ -618,7 +660,6 @@ for symbol in list_symbol:
         roe_local = (roe0 + roe1 + roe2) / 3
     except:
         roe_local = None
-
 
     print symbol, roe_local
     # print "*****************"    
