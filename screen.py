@@ -364,7 +364,7 @@ list_industry = Exchange1.industry_selected ()
 # END: this section is for testing purposes
 
 # BEGIN: enable this section for analyzing all AMEX, NYSE, and NASDAQ stocks
-"""
+
 Exchange1 = Exchange ('amex')
 Exchange2 = Exchange ('nyse')
 Exchange3 = Exchange ('nasdaq')
@@ -375,7 +375,7 @@ list_price = Exchange1.price_selected () + Exchange2.price_selected () + Exchang
 list_nshares = Exchange1.nshares_selected () + Exchange2.nshares_selected () + Exchange3.nshares_selected ()
 list_sector = Exchange1.sector_selected () + Exchange2.sector_selected () + Exchange3.sector_selected ()
 list_industry = Exchange1.industry_selected () + Exchange2.industry_selected () + Exchange3.industry_selected ()
-"""
+
 # END: enable this section for analyzing all AMEX, NYSE, and NASDAQ stocks
 
 num_stocks = len (list_symbol)
@@ -464,7 +464,7 @@ def download_page (url, file_name):
         file_size = os.path.getsize (file_name)
     except:
         file_size = 0
-    file_age_max_hours = 96
+    file_age_max_hours = 168
     file_age_max_seconds = file_age_max_hours * 3600
     n_fail = 0
     n_fail_max = 2
@@ -514,7 +514,7 @@ def download_data_stock (symbol1):
     print "Downloading cash flow data"
     download_page (url3, local3)
 
-"""    
+    
 create_dir (LOCAL_BASE) # Create screen-downloads directory if it does not already exist
 i_stock = 0
 i_stock_max = len (list_symbol)
@@ -530,7 +530,7 @@ for symbol in list_symbol:
     remain_s = (i_stock_max - i_stock)/rate_s
     remain_m = int (round(remain_s/60))
     print "Download completion: " + str(i_stock) + '/' + str(i_stock_max) + "; Minutes remaining: " + str(remain_m)
-"""
+
     
 ###############################################################
 # PART 4: For each stock, process the financial data downloaded
@@ -697,10 +697,11 @@ for symbol in list_symbol:
         ppe4 = list_ppe [4] * units_balancesheet
 
         roe0 = (cfo0 + tax0 - .1 * ppe1) / ppe1
-        roe1 = (cfo1 + tax0 - .1 * ppe2) / ppe1
-        roe2 = (cfo2 + tax0 - .1 * ppe3) / ppe1
-        roe3 = (cfo3 + tax0 - .1 * ppe4) / ppe1
+        roe1 = (cfo1 + tax1 - .1 * ppe2) / ppe2
+        roe2 = (cfo2 + tax2 - .1 * ppe3) / ppe3
+        roe3 = (cfo3 + tax3 - .1 * ppe4) / ppe4
         roe_ave = (roe0 + roe1 + roe2 + roe3)/4
+        print roe0, roe1, roe2, roe3
     except:
         roe_ave = None
     list_roe.append (ratio_to_str(roe_ave))
@@ -730,7 +731,7 @@ for symbol in list_symbol:
         earn_ps = earn / nshares
     except:
         earn_ps = None
-    list_eps.append (earn_ps)
+    list_eps.append (str(earn_ps))
 
     # Net liquidity per share
     netliqps = 0
@@ -738,7 +739,8 @@ for symbol in list_symbol:
         netliqps = netliq / nshares
     except:
         netliqps = None
-    list_netliq_ps.append (netliqps)
+    print symbol, netliqps
+    list_netliq_ps.append (str(netliqps))
 
     # Intrinsic value per share
     intrinsic_ps = 0
@@ -746,7 +748,7 @@ for symbol in list_symbol:
         intrinsic_ps = 10 * earn_ps + netliqps
     except:
         intrinsic_ps = None
-    list_intrinsic_ps.append (intrinsic_ps)
+    list_intrinsic_ps.append (str(intrinsic_ps))
 
     # Price
     price = list_price [i_stock]
@@ -767,6 +769,14 @@ for symbol in list_symbol:
         pe = None
     list_pe.append (ratio_to_str(pe))
 
+    # Dopeler Yield
+    yld = 0
+    try:
+        yld = earn_ps / (price - netliqps)
+    except:
+         yld = None
+    list_yield.append (ratio_to_str(yld))
+
 
     i_stock = i_stock + 1
     now = time.time ()
@@ -776,11 +786,6 @@ for symbol in list_symbol:
     remain_m = int (round(remain_s/60))
     print "Analysis completion: " + str(i_stock) + '/' + str(i_stock_max) + "; Minutes remaining: " + str(remain_m)
 
-
-
-
-
-
 #########################################
 # PART 5: PRINT THE RESULTS TO A CSV FILE
 #########################################
@@ -788,7 +793,6 @@ for symbol in list_symbol:
 i_stock = 0
 i_stock_max = len (list_symbol) -1
 filename_output = dir_output + "/results.csv"
-# file_object = open(filename_output, "w")
 
 with open(filename_output, 'w') as csvfile:
     resultswriter = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
@@ -798,7 +802,14 @@ with open(filename_output, 'w') as csvfile:
     h4 = 'Dopeler ROE'
     h5 = 'Dopeler PB'
     h6 = 'Dopeler PE'
-    resultswriter.writerow ([h1, h2, h3, h4, h5, h6])
+    h7 = 'Dopeler Yield'
+    h8 = 'Intrinsic Value'
+    h9 = 'Dopeler EPS'
+    h10 = 'Net Liquidity/Share'
+    h11 = 'Sector'
+    h12 = 'Industry'
+
+    resultswriter.writerow ([h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12])
     while i_stock <= i_stock_max:
         c1 = list_symbol [i_stock]
         c2 = list_name [i_stock]
@@ -806,7 +817,13 @@ with open(filename_output, 'w') as csvfile:
         c4 = list_roe [i_stock]
         c5 = list_pb [i_stock]
         c6 = list_pe [i_stock]
-        resultswriter.writerow([c1, c2, c3, c4, c5, c6])
+        c7 = list_yield [i_stock]
+        c8 = list_intrinsic_ps [i_stock]
+        c9 = list_eps [i_stock]
+        c10 = list_netliq_ps [i_stock]
+        c11 = list_sector [i_stock]
+        c12 = list_industry [i_stock]
+        resultswriter.writerow([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12])
         i_stock = i_stock + 1
     
 
