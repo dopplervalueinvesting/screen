@@ -21,10 +21,10 @@ import datetime
 import urllib2
 import time, random
 import socket
-import BeautifulSoup
-from BeautifulSoup import BeautifulSoup
+import urllib
+import lxml.html
 import re
-from HTMLParser import HTMLParser
+import csv
 
 dir_analysis = os.getcwd()
 os.chdir('..')
@@ -364,7 +364,7 @@ list_industry = Exchange1.industry_selected ()
 # END: this section is for testing purposes
 
 # BEGIN: enable this section for analyzing all AMEX, NYSE, and NASDAQ stocks
-
+"""
 Exchange1 = Exchange ('amex')
 Exchange2 = Exchange ('nyse')
 Exchange3 = Exchange ('nasdaq')
@@ -375,7 +375,7 @@ list_price = Exchange1.price_selected () + Exchange2.price_selected () + Exchang
 list_nshares = Exchange1.nshares_selected () + Exchange2.nshares_selected () + Exchange3.nshares_selected ()
 list_sector = Exchange1.sector_selected () + Exchange2.sector_selected () + Exchange3.sector_selected ()
 list_industry = Exchange1.industry_selected () + Exchange2.industry_selected () + Exchange3.industry_selected ()
-
+"""
 # END: enable this section for analyzing all AMEX, NYSE, and NASDAQ stocks
 
 num_stocks = len (list_symbol)
@@ -515,7 +515,7 @@ def download_data_stock (symbol1):
     print "Downloading cash flow data"
     download_page (url3, local3)
 
-    
+"""    
 create_dir (LOCAL_BASE) # Create screen-downloads directory if it does not already exist
 i_stock = 0
 i_stock_max = len (list_symbol)
@@ -530,51 +530,12 @@ for symbol in list_symbol:
     rate_s = i_stock / t_elapsed # Stocks/second
     remain_s = (i_stock_max - i_stock)/rate_s
     remain_m = int (round(remain_s/60))
-    print "Download completion: " + str(i_stock) + '/' + str(i_stock_max) + "; " + str(remain_m) + " minutes remaining"
-
+    print "Download completion: " + str(i_stock) + '/' + str(i_stock_max) + "; Minutes remaining: " + str(remain_m)
+"""
     
 ###############################################################
 # PART 4: For each stock, process the financial data downloaded
 ###############################################################
-
-# Purpose: Obtain data for a specific line item on the balance sheet
-# Inputs: two strings (one of the symbol, one for the title of the line item)
-# Output: list of numbers for the line item
-def list_line_balance (symbol_input, title_input):
-    url_local = local_balancesheet (symbol_input)
-    url_local = "file://" + url_local
-    page = urllib2.urlopen (url_local)
-    soup = BeautifulSoup (page)
-    soup_line_item = soup.findAll(text=title_input)[0].parent.parent.parent
-    list_output = soup_line_item.findAll('td') # List of elements
-    list_output = clean_list (list_output)
-    return list_output
-
-# Purpose: Obtain data for a specific line item on the cash flow statement
-# Inputs: two strings (one of the symbol, one for the title of the line item)
-# Output: list of numbers for the line item
-def list_line_cashflow (symbol_input, title_input):
-    url_local = local_cashflow (symbol_input)
-    url_local = "file://" + url_local
-    page = urllib2.urlopen (url_local)
-    soup = BeautifulSoup (page)
-    soup_line_item = soup.findAll(text=title_input)[0].parent.parent.parent
-    list_output = soup_line_item.findAll('td') # List of elements
-    list_output = clean_list (list_output)
-    return list_output
-
-# Purpose: Obtain data for a specific line item on the income statement
-# Inputs: two strings (one of the symbol, one for the title of the line item)
-# Output: list of numbers for the line item
-def list_line_income (symbol_input, title_input):
-    url_local = local_income (symbol_input)
-    url_local = "file://" + url_local
-    page = urllib2.urlopen (url_local)
-    soup = BeautifulSoup (page)
-    soup_line_item = soup.findAll(text=title_input)[0].parent.parent.parent
-    list_output = soup_line_item.findAll('td') # List of elements
-    list_output = clean_list (list_output)
-    return list_output
 
 # Purpose: Remove the HTML tags, commas, and spaces from an element in a list; used for processing financial data
 # Input: 1-D list of BeautifulSoup.Tag
@@ -587,62 +548,80 @@ def clean_list (list_input):
     while n <= n_last:
         item_tag = list_input [n]
         item_string = str (item_tag) # Convert from type BeautifulSoup.Tag to type string
-        item_string = re.sub('<[^<]+?>', '', item_string) # Eliminate HTML tags
         item_string = item_string.replace (' ', '') # Eliminate spaces
+        item_string = item_string.replace ('\t', '') # Eliminate tabs
         item_string = item_string.replace (',', '') # Eliminate commas
+        item_string = re.sub('<[^<]+?>', '', item_string) # Eliminate HTML tags
         item_float = str_to_float (item_string)
         list_output.append (item_float)
         n = n + 1            
     return list_output
 
-# Purpose: obtain the numbers for balance sheet line items for a given stock and line item
-# Input: two strings
-# Output: 1-D list of numbers
-def line_balance (symbol, title):
-    try:
-        line_output = list_line_balance (symbol, title)
-        return line_output
-    except:
-        print title + ": not available"
-        return None 
-
-# Purpose: obtain the numbers for cash flow line items for a given stock and line item
-# Input: two strings
-# Output: 1-D list of numbers
-def line_cashflow (symbol, title):
-    try:
-        line_output = list_line_cashflow (symbol, title)
-        return line_output
-    except:
-        print title + ": not available"
-        return None
-
-# Purpose: obtain the numbers for income statement line items for a given stock and line item
-# Input: two strings
-# Output: 1-D list of numbers
-def line_income (symbol, title):
-    try:
-        line_output = list_line_income (symbol, title)
-        return line_output
-    except:
-        print title + ": not available"
-        return None
-
-
+list_dopeler_roe = []
+i_stock = 0
+i_stock_max = len (list_symbol)
+start = time.time ()
 for symbol in list_symbol:
     print "Analyzing " + symbol
 
-    line_cash = line_balance (symbol, "Cash & Short Term Investments")    
-    line_ppe = line_balance (symbol, "Property, Plant & Equipment - Gross")
-    line_liab = line_balance (symbol, "Total Liabilities")
-    line_ps = line_balance (symbol, "Preferred Stock (Carrying Value)")
-    
-    line_cfo = line_cashflow (symbol, "Net Operating Cash Flow")
-    
-    line_tax = line_income (symbol, "Income Tax")    
+    # SPECIAL THANKS to root on stackoverflow.com for help on how to parse a row from an HTML table
 
-    print "Read downloaded pages"
+    # PARSE DATA FROM BALANCE SHEET
+    list_cash = []
+    list_ppe = []
+    list_liab = []
+    list_ps = []
+
+    try:
+        url_local = local_balancesheet (symbol)
+        url_local = "file://" + url_local
+        result = urllib.urlopen(url_local)
+        element_html = result.read()
+        doc = lxml.html.document_fromstring (element_html)
+
+        list_row = doc.xpath(u'.//th[div[text()="Cash & Short Term Investments"]]/following-sibling::td/text()')
+        list_cash = clean_list (list_row)
+
+        list_row = doc.xpath(u'.//th[div[text()="Property, Plant & Equipment - Gross"]]/following-sibling::td/text()')
+        list_ppe = clean_list (list_row)
+
+        list_row = doc.xpath(u'.//th[div[text()="Total Liabilities"]]/following-sibling::td/text()')
+        list_liab = clean_list (list_row)
+
+        list_row = doc.xpath(u'.//th[div[text()="Preferred Stock (Carrying Value)"]]/following-sibling::td/text()')
+        list_ps = clean_list (list_row)
+    except:
+        print "Balance sheet data not found"
+
+    # PARSE DATA FROM CASH FLOW STATEMENT
+    list_cfo = [] # Cash flow from operations
     
+    try:
+        url_local = local_cashflow (symbol)
+        url_local = "file://" + url_local
+        result = urllib.urlopen(url_local)
+        element_html = result.read()
+        doc = lxml.html.document_fromstring (element_html)
+
+        list_row = doc.xpath(u'.//th[div[text()="Net Operating Cash Flow"]]/following-sibling::td/text()')
+        list_cfo = clean_list (list_row)
+    except:
+        print "Cash flow data not found"
+
+    # PARSE DATA FROM INCOME STATEMENT
+    list_tax = [] # Income tax expense
+    
+    try:
+        url_local = local_income (symbol)
+        url_local = "file://" + url_local
+        result = urllib.urlopen(url_local)
+        element_html = result.read()
+        doc = lxml.html.document_fromstring (element_html)
+
+        list_row = doc.xpath(u'.//th[div[text()="Income Tax"]]/following-sibling::td/text()')
+        list_tax = clean_list (list_row)
+    except:
+        print "Income statement data not found"
 
     # last year's PPE (at end of year) = PPE at the start of this year
     # this year's pre-tax free cash flow = This year's after-tax free cash flow + this year's income taxes
@@ -653,23 +632,59 @@ for symbol in list_symbol:
     # this year's Dopeler earnings = this year's official cash flow from operations + this year's income taxes
     # - .1 * last year's PPE
     # this year's Dopeler Return On Equity = this year's Dopeler earnings / last year's PPE
+    roe_local = 0
     try:
-        roe0 = (line_cfo [0] + line_tax [0] - .1 * line_ppe[1]) / line_ppe [1]
-        roe1 = (line_cfo [1] + line_tax [1] - .1 * line_ppe[2]) / line_ppe [2]
-        roe2 = (line_cfo [2] + line_tax [2] - .1 * line_ppe[3]) / line_ppe [3]
+        roe0 = (list_cfo [0] + list_tax [0] - .1 * list_ppe[1]) / list_ppe [1]
+        roe1 = (list_cfo [1] + list_tax [1] - .1 * list_ppe[2]) / list_ppe [2]
+        roe2 = (list_cfo [2] + list_tax [2] - .1 * list_ppe[3]) / list_ppe [3]
         roe_local = (roe0 + roe1 + roe2) / 3
     except:
         roe_local = None
 
-    print symbol, roe_local
-    # print "*****************"    
-    # print line_cash
-    # print line_ppe
-    # print line_liab
-    # print line_ps
+    print roe_local
+    list_dopeler_roe.append (roe_local)
 
-    # print line_cfo
+    i_stock = i_stock + 1
+    now = time.time ()
+    t_elapsed = now - start
+    rate_s = i_stock / t_elapsed # Stocks/second
+    remain_s = (i_stock_max - i_stock)/rate_s
+    remain_m = int (round(remain_s/60))
+    print "Analysis completion: " + str(i_stock) + '/' + str(i_stock_max) + "; Minutes remaining: " + str(remain_m)
 
-    # print line_tax
-    # print "*****************"
+
+print list_dopeler_roe
+
+
+
+#########################################
+# PART 5: PRINT THE RESULTS TO A CSV FILE
+#########################################
+
+i_stock = 0
+i_stock_max = len (list_symbol) -1
+filename_output = dir_output + "/results.csv"
+# file_object = open(filename_output, "w")
+
+with open(filename_output, 'w') as csvfile:
+    resultswriter = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+    resultswriter.writerow (['Symbol', 'Name'])
+    while i_stock <= i_stock_max:
+        c1 = list_symbol [i_stock]
+        c2 = list_name [i_stock]
+        resultswriter.writerow([c1, c2])
+        i_stock = i_stock + 1
+    
+
+
+
+
+
+
+
+
+
+
+
+
 
