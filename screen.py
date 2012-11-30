@@ -451,10 +451,9 @@ class TimeoutException(Exception):
 def timeout_handler(signum, frame):
     raise TimeoutException()
 
-# Download a page from a url and save it, just the basics
-# Download a page from a url and save it, includes conditions
-# Only download if the existing page is more than 3 days old.
-# If the download is not successful, make up to 5 additional attempts.
+# Download a page from a url and save it
+# Only download if the existing page is at least 4 days old.
+# If the download is not successful, make up to 2 additional attempts.
 # Inputs: URL of source, path of destination
 # Times out after 10 seconds
 def download_page (url, file_name):
@@ -557,7 +556,42 @@ def clean_list (list_input):
         n = n + 1            
     return list_output
 
-list_dopeler_roe = []
+# Purpose: Determine the units in the page (thousands of dollars or millions of dollars)
+# Input: string
+# Output: number
+def get_units (string_html):
+    str_thousands = "Figures in thousands of U.S. Dollars"
+    str_millions = "Figures in millions of U.S. Dollars"
+    str_billions = "Figures in millions of U.S. Dollars"
+    if (str_thousands in string_html):
+        return 1E3
+    elif (str_millions in string_html):
+        return 1E6
+    elif (str_billions in string_html):
+        return 1E9
+    else:
+        return None
+
+# Purpose: Convert a number into a string, "<0" if negative, "N/A" if None; used for valuation ratios
+# Input: number
+# Output: string
+def ratio_to_str (num_input):
+    str_output = ''
+    if num_input == None:
+        str_output = 'N/A'
+    elif num_input < 0:
+        str_output = '<0'
+    else:
+        str_output = str(num_input)
+    return str_output
+
+list_roe = []
+list_eps = []
+list_netliq_ps = []
+list_intrinsic_ps = []
+list_pe = []
+list_yield = []
+list_pb = []
 i_stock = 0
 i_stock_max = len (list_symbol)
 start = time.time ()
@@ -571,6 +605,7 @@ for symbol in list_symbol:
     list_ppe = []
     list_liab = []
     list_ps = []
+    units_balancesheet = 0
 
     try:
         url_local = local_balancesheet (symbol)
@@ -578,6 +613,8 @@ for symbol in list_symbol:
         result = urllib.urlopen(url_local)
         element_html = result.read()
         doc = lxml.html.document_fromstring (element_html)
+
+        units_balancesheet = get_units (element_html)
 
         list_row = doc.xpath(u'.//th[div[text()="Cash & Short Term Investments"]]/following-sibling::td/text()')
         list_cash = clean_list (list_row)
@@ -595,6 +632,7 @@ for symbol in list_symbol:
 
     # PARSE DATA FROM CASH FLOW STATEMENT
     list_cfo = [] # Cash flow from operations
+    units_cashflow = 0
     
     try:
         url_local = local_cashflow (symbol)
@@ -603,6 +641,8 @@ for symbol in list_symbol:
         element_html = result.read()
         doc = lxml.html.document_fromstring (element_html)
 
+        units_cashflow = get_units (element_html)
+
         list_row = doc.xpath(u'.//th[div[text()="Net Operating Cash Flow"]]/following-sibling::td/text()')
         list_cfo = clean_list (list_row)
     except:
@@ -610,6 +650,7 @@ for symbol in list_symbol:
 
     # PARSE DATA FROM INCOME STATEMENT
     list_tax = [] # Income tax expense
+    units_income = 0
     
     try:
         url_local = local_income (symbol)
@@ -617,6 +658,8 @@ for symbol in list_symbol:
         result = urllib.urlopen(url_local)
         element_html = result.read()
         doc = lxml.html.document_fromstring (element_html)
+
+        units_income = get_units (element_html)
 
         list_row = doc.xpath(u'.//th[div[text()="Income Tax"]]/following-sibling::td/text()')
         list_tax = clean_list (list_row)
@@ -632,17 +675,98 @@ for symbol in list_symbol:
     # this year's Dopeler earnings = this year's official cash flow from operations + this year's income taxes
     # - .1 * last year's PPE
     # this year's Dopeler Return On Equity = this year's Dopeler earnings / last year's PPE
-    roe_local = 0
+    roe_ave = 0 # average Dopeler Return On Equity for the last 4 years
+    ppe0 = 0 # last year's PPE
     try:
-        roe0 = (list_cfo [0] + list_tax [0] - .1 * list_ppe[1]) / list_ppe [1]
-        roe1 = (list_cfo [1] + list_tax [1] - .1 * list_ppe[2]) / list_ppe [2]
-        roe2 = (list_cfo [2] + list_tax [2] - .1 * list_ppe[3]) / list_ppe [3]
-        roe_local = (roe0 + roe1 + roe2) / 3
-    except:
-        roe_local = None
+        cfo0 = list_cfo [0] * units_cashflow
+        cfo1 = list_cfo [1] * units_cashflow
+        cfo2 = list_cfo [2] * units_cashflow
+        cfo3 = list_cfo [3] * units_cashflow
+        cfo4 = list_cfo [4] * units_cashflow
 
-    print roe_local
-    list_dopeler_roe.append (roe_local)
+        tax0 = list_tax [0] * units_income
+        tax1 = list_tax [1] * units_income
+        tax2 = list_tax [2] * units_income
+        tax3 = list_tax [3] * units_income
+        tax4 = list_tax [4] * units_income
+
+        ppe0 = list_ppe [0] * units_balancesheet
+        ppe1 = list_ppe [1] * units_balancesheet
+        ppe2 = list_ppe [2] * units_balancesheet
+        ppe3 = list_ppe [3] * units_balancesheet
+        ppe4 = list_ppe [4] * units_balancesheet
+
+        roe0 = (cfo0 + tax0 - .1 * ppe1) / ppe1
+        roe1 = (cfo1 + tax0 - .1 * ppe2) / ppe1
+        roe2 = (cfo2 + tax0 - .1 * ppe3) / ppe1
+        roe3 = (cfo3 + tax0 - .1 * ppe4) / ppe1
+        roe_ave = (roe0 + roe1 + roe2 + roe3)/4
+    except:
+        roe_ave = None
+    list_roe.append (ratio_to_str(roe_ave))
+
+    # this year's projected Dopeler Earnings = last year's PPE * average Dopeler Return On Equity for the last 4 years
+    earn = 0
+    try:
+        earn = roe_ave * ppe0
+    except:
+        earn = None
+    
+    # net liquidity = cash and short term investments - official total liabilities - preferred stock
+    netliq = 0
+    try:
+        liq0 = list_cash [0] * units_balancesheet
+        liab0 = list_liab [0] * units_balancesheet
+        ps0 = list_ps [0] * units_balancesheet
+        netliq = liq0 - liab0 - ps0
+    except:
+        netliq = None
+
+    nshares = list_nshares [i_stock] # Number of shares outstanding
+    
+    # Dopeler earnings per share
+    earn_ps = 0
+    try:
+        earn_ps = earn / nshares
+    except:
+        earn_ps = None
+    list_eps.append (earn_ps)
+
+    # Net liquidity per share
+    netliqps = 0
+    try:
+        netliqps = netliq / nshares
+    except:
+        netliqps = None
+    list_netliq_ps.append (netliqps)
+
+    # Intrinsic value per share
+    intrinsic_ps = 0
+    try:
+        intrinsic_ps = 10 * earn_ps + netliqps
+    except:
+        intrinsic_ps = None
+    list_intrinsic_ps.append (intrinsic_ps)
+
+    # Price
+    price = list_price [i_stock]
+
+    # Dopeler price/book
+    pb = 0
+    try:
+        pb = price/intrinsic_ps
+    except:
+        pb = None
+    list_pb.append (ratio_to_str(pb))
+
+    # Dopeler PE
+    pe = 0
+    try:
+        pe = (price - netliqps) / earn_ps
+    except:
+        pe = None
+    list_pe.append (ratio_to_str(pe))
+
 
     i_stock = i_stock + 1
     now = time.time ()
@@ -653,7 +777,7 @@ for symbol in list_symbol:
     print "Analysis completion: " + str(i_stock) + '/' + str(i_stock_max) + "; Minutes remaining: " + str(remain_m)
 
 
-print list_dopeler_roe
+
 
 
 
@@ -668,11 +792,21 @@ filename_output = dir_output + "/results.csv"
 
 with open(filename_output, 'w') as csvfile:
     resultswriter = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-    resultswriter.writerow (['Symbol', 'Name'])
+    h1 = 'Symbol'
+    h2 = 'Name'
+    h3 = 'Price'
+    h4 = 'Dopeler ROE'
+    h5 = 'Dopeler PB'
+    h6 = 'Dopeler PE'
+    resultswriter.writerow ([h1, h2, h3, h4, h5, h6])
     while i_stock <= i_stock_max:
         c1 = list_symbol [i_stock]
         c2 = list_name [i_stock]
-        resultswriter.writerow([c1, c2])
+        c3 = list_price [i_stock]
+        c4 = list_roe [i_stock]
+        c5 = list_pb [i_stock]
+        c6 = list_pe [i_stock]
+        resultswriter.writerow([c1, c2, c3, c4, c5, c6])
         i_stock = i_stock + 1
     
 
