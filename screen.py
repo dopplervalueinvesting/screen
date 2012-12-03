@@ -18,6 +18,7 @@ import sys
 import os
 import csv
 import datetime
+import signal
 import urllib2
 import time, random
 import socket
@@ -33,8 +34,98 @@ dir_input = dir_doppler + '/screen-input'
 dir_output = dir_doppler + '/screen-output'
 os.chdir(dir_analysis)
 
+######################################################################################
+# PART 1: DOWNLOAD THE LISTS OF AMEX, NYSE, AND NASDAQ STOCKS FROM THE NASDAQ WEB SITE
+######################################################################################
+
+# Get age of file
+# Based on solution at 
+# http://stackoverflow.com/questions/5799070/how-to-see-if-file-is-older-than-3-months-in-python
+# Returns a billion if the file does not exist
+def age_of_file (file1): # In hours
+    now = datetime.datetime.now ()
+    try:
+        modified_date = datetime.datetime.fromtimestamp(os.path.getmtime(file1))
+        age = now - modified_date
+        age_days = age.days 
+        age_seconds = age.seconds
+        age_hours = 24 * age_days + age_seconds/3600
+        return age_hours
+    except:
+        return 1000000000
+
+class TimeoutException(Exception): 
+    pass
+
+def timeout_handler(signum, frame):
+    raise TimeoutException()
+
+# Download a page from a url and save it
+# Only download if the existing page is at least 4 days old.
+# If the download is not successful, make up to 2 additional attempts.
+# Inputs: URL of source, path of destination
+# Times out after 10 seconds
+def download_page (url, file_name, file_age_max_hours):
+    from urllib2 import Request, urlopen, URLError, HTTPError
+    file_age = age_of_file (file_name) # In hours
+    file_size = 0
+    try:
+        file_size = os.path.getsize (file_name)
+    except:
+        file_size = 0
+    n_fail = 0
+    n_fail_max = 2
+    time.sleep (random.uniform (.1, .2)) # Delay is needed to limit the impact on the upstream server
+    while ((file_age > file_age_max_hours or file_size == 0) and n_fail <= n_fail_max):
+        try:
+            signal.signal(signal.SIGALRM, timeout_handler) 
+            signal.alarm (10) # Trigger alarm in 10 seconds
+            f = urllib2.urlopen (url)
+            local_file = open (file_name, 'w') # Open local file
+            local_file.write (f.read())
+            local_file.close ()
+            signal.alarm(0) # Disable the alarm
+            break # Script hangs without this command
+        except urllib2.HTTPError, e:
+            n_fail = n_fail + 1
+            print "Failure #: " + str (n_fail)
+            print "HTTP Error:",e.code , url
+        except urllib2.URLError, e:
+            n_fail = n_fail + 1
+            print "Failure #: " + str (n_fail)
+            print "URL Error:",e.reason , url
+        except Exception,e: 
+            n_fail = n_fail + 1
+            print "Failure #: " + str (n_fail)
+            print str(e)
+    if n_fail > n_fail_max:
+        print "Download failed, giving up"
+    if file_age <= file_age_max_hours and file_size > 0:
+        print "Local file is new enough - skipping download"
+
+# Purpose: download the CSV file listing all stocks on the exchange
+# http://www.nasdaq.com/screening/companies-by-industry.aspx?exchange=NASDAQ&render=download
+URL_BASE_NASDAQ = 'http://www.nasdaq.com/screening/companies-by-industry.aspx?exchange='
+URL_END_NASDAQ = '&render=download'
+
+url1 = URL_BASE_NASDAQ + 'AMEX' + URL_END_NASDAQ
+url2 = URL_BASE_NASDAQ + 'NYSE' + URL_END_NASDAQ
+url3 = URL_BASE_NASDAQ + 'NASDAQ' + URL_END_NASDAQ
+
+file1 = dir_input + '/companylist-amex.csv'
+file2 = dir_input + '/companylist-nyse.csv'
+file3 = dir_input + '/companylist-nasdaq.csv'
+file_age_max_hours = 12
+
+print ('Downloading list of AMEX stocks')
+download_page (url1, file1, file_age_max_hours)
+print ('Downloading list of NYSE stocks')
+download_page (url2, file2, file_age_max_hours)
+print ('Downloading list of NASDAQ stocks')
+download_page (url3, file3, file_age_max_hours)
+
 ##############################################################################################
-# PART 1: For a given exchange, obtain a list of ticker symbols for stocks that are NOT funds.
+# PART 2: For a given exchange, obtain a list of ticker symbols for stocks that are NOT funds.
 ##############################################################################################
 
 # Purpose: extract a given column from a 2-D list
@@ -159,7 +250,7 @@ class Exchange:
     # Output: 1-D data list
     def industry_all (self):
         list1 = self.data ()
-        list_output = col_title (list1, 'industry')
+        list_output = col_title (list1, 'Industry')
         return list_output
 
     # Purpose: get a list of the names for each stock
@@ -346,7 +437,7 @@ class Exchange:
         return list_output
 
 #######################################################################################################################
-# PART 2: Using Exchange.symbol_selected, compile the list of ticker symbols from the AMEX, NYSE, and NASDAQ exchanges.
+# PART 3: Using Exchange.symbol_selected, compile the list of ticker symbols from the AMEX, NYSE, and NASDAQ exchanges.
 #######################################################################################################################
 print "******************************"
 print "BEGIN acquiring list of stocks"
@@ -364,10 +455,10 @@ list_industry = Exchange1.industry_selected ()
 # END: this section is for testing purposes
 
 # BEGIN: enable this section for analyzing all AMEX, NYSE, and NASDAQ stocks
-
+"""
 Exchange1 = Exchange ('amex')
-Exchange2 = Exchange ('nyse')
-Exchange3 = Exchange ('nasdaq')
+Exchange2 = Exchange ('nasdaq')
+Exchange3 = Exchange ('nyse')
 
 list_symbol = Exchange1.symbol_selected () + Exchange2.symbol_selected () + Exchange3.symbol_selected ()
 list_name = Exchange1.name_selected () + Exchange2.name_selected () + Exchange3.name_selected ()
@@ -375,7 +466,7 @@ list_price = Exchange1.price_selected () + Exchange2.price_selected () + Exchang
 list_nshares = Exchange1.nshares_selected () + Exchange2.nshares_selected () + Exchange3.nshares_selected ()
 list_sector = Exchange1.sector_selected () + Exchange2.sector_selected () + Exchange3.sector_selected ()
 list_industry = Exchange1.industry_selected () + Exchange2.industry_selected () + Exchange3.industry_selected ()
-
+"""
 # END: enable this section for analyzing all AMEX, NYSE, and NASDAQ stocks
 
 num_stocks = len (list_symbol)
@@ -384,13 +475,14 @@ print "FINISHED acquiring list of stocks"
 print "*********************************"
 
 ############################################################
-# PART 3: For each stock, download the financial data needed
+# PART 4: For each stock, download the financial data needed
 ############################################################
 # NOTE: Downloading is bypassed if the file to be replaced is less than 4 days old.  
 # NOTE: Delay is used to avoid overwhelming the servers.
 
 # Getting financial figures from CNBC (more data than Yahoo, capable of handling big loads)
 URL_BASE_SMARTMONEY = 'http://www.smartmoney.com/quote/'
+URL_BASE_YAHOO = "http://finance.yahoo.com/q/"
 LOCAL_BASE = dir_doppler + '/screen-downloads'
 
 # Smart Money URL for balance sheet data
@@ -411,6 +503,16 @@ def url_cashflow (symbol1):
     url1 = url1 + '/?story=financials&timewindow=1&opt=YC&isFinprint=1&framework.view=smi_emptyView'
     return url1
 
+# Yahoo Finance URL for income statement data
+def url_income_yahoo (symbol1):
+    url1 = URL_BASE_YAHOO + 'is?s=' + symbol1 + '+Income+Statement&annual'
+    return url1
+
+# Yahoo Finance URL for income statement data
+def url_balancesheet_yahoo (symbol1):
+    url1 = URL_BASE_YAHOO + 'bs?s=' + symbol1 + '&annual'
+    return url1
+
 def local_root (symbol1):
     url1 = LOCAL_BASE + '/' + symbol1
     return url1
@@ -427,93 +529,50 @@ def local_cashflow (symbol1):
     url1 = local_root (symbol1) + '/cashflow.html'
     return url1
 
+def local_income_yahoo (symbol1):
+    url1 = local_root (symbol1) + '/income-yahoo.html'
+    return url1
+
+def local_balancesheet_yahoo (symbol1):
+    url1 = local_root (symbol1) + '/balancesheet-yahoo.html'
+    return url1
+
+
 # Create directory path1 if it does not already exist
 def create_dir (path1):
     if not (os.path.exists(path1)):
         os.mkdir (path1)
 
-# Get age of file
-# Based on solution at 
-# http://stackoverflow.com/questions/5799070/how-to-see-if-file-is-older-than-3-months-in-python
-# Returns a billion if the file does not exist
-def age_of_file (file1): # In days
-    today = datetime.datetime.now ()
-    try:
-        modified_date = datetime.datetime.fromtimestamp(os.path.getmtime(file1))
-        age = today - modified_date
-        return age.seconds
-    except:
-        return 1000000000
-
-class TimeoutException(Exception): 
-    pass
-
-def timeout_handler(signum, frame):
-    raise TimeoutException()
-
-# Download a page from a url and save it
-# Only download if the existing page is at least 4 days old.
-# If the download is not successful, make up to 2 additional attempts.
-# Inputs: URL of source, path of destination
-# Times out after 10 seconds
-def download_page (url, file_name):
-    from urllib2 import Request, urlopen, URLError, HTTPError
-    file_age = age_of_file (file_name) # In seconds
-    file_size = 0
-    try:
-        file_size = os.path.getsize (file_name)
-    except:
-        file_size = 0
-    file_age_max_hours = 168
-    file_age_max_seconds = file_age_max_hours * 3600
-    n_fail = 0
-    n_fail_max = 2
-    while ((file_age > file_age_max_seconds or file_size == 0) and n_fail <= n_fail_max):
-        try:
-            signal.signal(signal.SIGALRM, timeout_handler) 
-            signal.alarm (10) # Trigger alarm in 10 seconds
-            f = urllib2.urlopen (url)
-            local_file = open (file_name, 'w') # Open local file
-            local_file.write (f.read())
-            local_file.close ()
-            signal.alarm(0) # Disable the alarm
-            time.sleep (random.uniform (.1, .5)) # Delay is needed to limit the impact on the upstream server
-        except urllib2.HTTPError, e:
-            n_fail = n_fail + 1
-            print "Failure #: " + str (n_fail)
-            print "HTTP Error:",e.code , url
-        except urllib2.URLError, e:
-            n_fail = n_fail + 1
-            print "Failure #: " + str (n_fail)
-            print "URL Error:",e.reason , url
-        except:
-            n_fail = n_fail + 1
-            print "Failure #: " + str (n_fail)
-            print "Other error"
-    if n_fail > n_fail_max:
-        print "Download failed, giving up"
-    if file_age <= file_age_max_seconds and file_size > 0:
-        print "Local file is new enough - skipping download"
-
 # Download information on a given stock
-def download_data_stock (symbol1):
+def download_data_stock (symbol1, file_age_max_hours):
     url1 = url_balancesheet (symbol1)
     url2 = url_income (symbol1)
     url3 = url_cashflow (symbol1)
+    url4 = url_balancesheet_yahoo (symbol1)
+    url5 = url_income_yahoo (symbol1)
     local1 = local_balancesheet (symbol1)
     local2 = local_income (symbol1)
     local3 = local_cashflow (symbol1)    
+    local4 = local_balancesheet_yahoo (symbol1)
+    local5 = local_income_yahoo (symbol1)
 
+    # NOTE: Alternating between downloading from Smartmoney and downloading from Yahoo Finance
+    # to limit impact on their servers
     print "Downloading data on " + symbol1
     print "Downloading balance sheet data"
-    download_page (url1, local1)
+    download_page (url1, local1, file_age_max_hours)
+
+    print "Downloading Yahoo balance sheet data"
+    download_page (url4, local4, file_age_max_hours)
 
     print "Downloading income statement data"
-    download_page (url2, local2)
+    download_page (url2, local2, file_age_max_hours)
+
+    print "Downloading Yahoo income data"
+    download_page (url5, local5, file_age_max_hours)
 
     print "Downloading cash flow data"
-    download_page (url3, local3)
-
+    download_page (url3, local3, file_age_max_hours)
     
 create_dir (LOCAL_BASE) # Create screen-downloads directory if it does not already exist
 i_stock = 0
@@ -521,19 +580,23 @@ i_stock_max = len (list_symbol)
 start = time.time ()
 for symbol in list_symbol:
     create_dir (local_root (symbol)) # Create directory for stock if it does not already exist
-    download_data_stock (symbol)
+    max_age_hours = 168
+    download_data_stock (symbol, max_age_hours)
     i_stock = i_stock + 1
 
     now = time.time ()
     t_elapsed = now - start
-    rate_s = i_stock / t_elapsed # Stocks/second
-    remain_s = (i_stock_max - i_stock)/rate_s
-    remain_m = int (round(remain_s/60))
-    print "Download completion: " + str(i_stock) + '/' + str(i_stock_max) + "; Minutes remaining: " + str(remain_m)
+    try:
+        rate_s = i_stock / t_elapsed # Stocks/second
+        remain_s = (i_stock_max - i_stock)/rate_s
+        remain_m = int (round(remain_s/60))
+        print "Download completion: " + str(i_stock) + '/' + str(i_stock_max) + "; Minutes remaining: " + str(remain_m)
+    except:
+        pass
 
     
 ###############################################################
-# PART 4: For each stock, process the financial data downloaded
+# PART 5: For each stock, process the financial data downloaded
 ###############################################################
 
 # Purpose: Remove the HTML tags, commas, and spaces from an element in a list; used for processing financial data
@@ -545,10 +608,10 @@ def clean_list (list_input):
     n_last = n_length -1
     n = 0
     while n <= n_last:
-        item_tag = list_input [n]
-        item_string = str (item_tag) # Convert from type BeautifulSoup.Tag to type string
+        item_string = list_input [n]
         item_string = item_string.replace (' ', '') # Eliminate spaces
         item_string = item_string.replace ('\t', '') # Eliminate tabs
+        item_string = item_string.replace ('\n', '') # Eliminate newlines
         item_string = item_string.replace (',', '') # Eliminate commas
         item_string = re.sub('<[^<]+?>', '', item_string) # Eliminate HTML tags
         item_float = str_to_float (item_string)
@@ -561,13 +624,16 @@ def clean_list (list_input):
 # Output: number
 def get_units (string_html):
     str_thousands = "Figures in thousands of U.S. Dollars"
+    str_thousands_alt = "All numbers in thousands" # Yahoo
     str_millions = "Figures in millions of U.S. Dollars"
-    str_billions = "Figures in millions of U.S. Dollars"
-    if (str_thousands in string_html):
+    str_millions_alt = "All numbers in millions" # Yahoo
+    str_billions = "Figures in billions of U.S. Dollars"
+    str_billions_alt = "All numbers in billions" # Yahoo
+    if (str_thousands in string_html) or (str_thousands_alt in string_html):
         return 1E3
-    elif (str_millions in string_html):
+    elif (str_millions in string_html) or (str_millions_alt in string_html):
         return 1E6
-    elif (str_billions in string_html):
+    elif (str_billions in string_html) or (str_billions_alt in string_html):
         return 1E9
     else:
         return None
@@ -579,16 +645,21 @@ def ratio_to_str (num_input):
     str_output = ''
     if num_input == None:
         str_output = 'N/A'
-    elif num_input < 0:
-        str_output = '<0'
     else:
         str_output = str(num_input)
     return str_output
 
-list_roe = []
+list_roe_ave = []
+list_roe0 = []
+list_roe1 = []
+list_roe2 = []
+list_roe3 = []
 list_eps = []
 list_netliq_ps = []
 list_intrinsic_ps = []
+list_assets_smartmoney = []
+list_assets_yahoo = []
+list_assets_ratio = []
 list_pe = []
 list_yield = []
 list_pb = []
@@ -598,13 +669,15 @@ start = time.time ()
 for symbol in list_symbol:
     print "Analyzing " + symbol
 
-    # SPECIAL THANKS to root on stackoverflow.com for help on how to parse a row from an HTML table
+    # SPECIAL THANKS to root on stackoverflow.com for help on how to parse a row from the Smartmoney pages.
+    # SPECIAL THANKS to MRAB on comp.lang.python for help on how to parse a row from the Yahoo Finance pages.
 
     # PARSE DATA FROM BALANCE SHEET
     list_cash = []
     list_ppe = []
     list_liab = []
     list_ps = []
+    list_assets = []
     units_balancesheet = 0
 
     try:
@@ -616,19 +689,46 @@ for symbol in list_symbol:
 
         units_balancesheet = get_units (element_html)
 
-        list_row = doc.xpath(u'.//th[div[text()="Cash & Short Term Investments"]]/following-sibling::td/text()')
+        list_row = doc.xpath(u'.//th[div[contains (text(), "Cash & Short Term Investments")]]/following-sibling::td/text()')
         list_cash = clean_list (list_row)
+        print list_cash
 
-        list_row = doc.xpath(u'.//th[div[text()="Property, Plant & Equipment - Gross"]]/following-sibling::td/text()')
+        list_row = doc.xpath(u'.//th[div[contains (text(), "Property, Plant & Equipment - Gross")]]/following-sibling::td/text()')
         list_ppe = clean_list (list_row)
+        print list_ppe
 
-        list_row = doc.xpath(u'.//th[div[text()="Total Liabilities"]]/following-sibling::td/text()')
+        list_row = doc.xpath(u'.//th[div[contains (text(), "Total Liabilities")]]/following-sibling::td/text()')
         list_liab = clean_list (list_row)
+        print list_liab
 
-        list_row = doc.xpath(u'.//th[div[text()="Preferred Stock (Carrying Value)"]]/following-sibling::td/text()')
+        list_row = doc.xpath(u'.//th[div[contains (text(), "Preferred Stock (Carrying Value)")]]/following-sibling::td/text()')
         list_ps = clean_list (list_row)
+        print list_ps
+
+        list_row = doc.xpath(u'.//th[div[contains (text(), "Total Assets")]]/following-sibling::td/text()')
+        list_assets = clean_list (list_row)
+        print list_assets
+
     except:
         print "Balance sheet data not found"
+
+    # PARSE DATA FROM BALANCE SHEET (YAHOO)
+    list_assets_alt = []
+    units_balancesheet_alt = 0
+    try:
+        url_local = local_balancesheet_yahoo (symbol)
+        url_local = "file://" + url_local
+        result = urllib.urlopen(url_local)
+        element_html = result.read()
+        doc = lxml.html.document_fromstring (element_html)
+
+        units_balancesheet_alt = get_units (element_html)
+
+        list_row = doc.xpath(u'.//td[strong[contains (text(),"Total Assets")]]/following-sibling::td/strong/text()') 
+        list_assets_alt = clean_list (list_row)
+
+    except:
+        print "Yahoo Finance balance sheet data not found"
 
     # PARSE DATA FROM CASH FLOW STATEMENT
     list_cfo = [] # Cash flow from operations
@@ -643,7 +743,7 @@ for symbol in list_symbol:
 
         units_cashflow = get_units (element_html)
 
-        list_row = doc.xpath(u'.//th[div[text()="Net Operating Cash Flow"]]/following-sibling::td/text()')
+        list_row = doc.xpath(u'.//th[div[contains (text(), "Net Operating Cash Flow")]]/following-sibling::td/text()')
         list_cfo = clean_list (list_row)
     except:
         print "Cash flow data not found"
@@ -661,7 +761,7 @@ for symbol in list_symbol:
 
         units_income = get_units (element_html)
 
-        list_row = doc.xpath(u'.//th[div[text()="Income Tax"]]/following-sibling::td/text()')
+        list_row = doc.xpath(u'.//th[div[contains (text(), "Income Tax")]]/following-sibling::td/text()')
         list_tax = clean_list (list_row)
     except:
         print "Income statement data not found"
@@ -675,36 +775,161 @@ for symbol in list_symbol:
     # this year's Dopeler earnings = this year's official cash flow from operations + this year's income taxes
     # - .1 * last year's PPE
     # this year's Dopeler Return On Equity = this year's Dopeler earnings / last year's PPE
+    
     roe_ave = 0 # average Dopeler Return On Equity for the last 4 years
-    ppe0 = 0 # last year's PPE
+    cfo0 = 0
+    cfo1 = 0
+    cfo2 = 0
+    cfo3 = 0
+    cfo4 = 0
+
     try:
         cfo0 = list_cfo [0] * units_cashflow
-        cfo1 = list_cfo [1] * units_cashflow
-        cfo2 = list_cfo [2] * units_cashflow
-        cfo3 = list_cfo [3] * units_cashflow
-        cfo4 = list_cfo [4] * units_cashflow
-
-        tax0 = list_tax [0] * units_income
-        tax1 = list_tax [1] * units_income
-        tax2 = list_tax [2] * units_income
-        tax3 = list_tax [3] * units_income
-        tax4 = list_tax [4] * units_income
-
-        ppe0 = list_ppe [0] * units_balancesheet
-        ppe1 = list_ppe [1] * units_balancesheet
-        ppe2 = list_ppe [2] * units_balancesheet
-        ppe3 = list_ppe [3] * units_balancesheet
-        ppe4 = list_ppe [4] * units_balancesheet
-
-        roe0 = (cfo0 + tax0 - .1 * ppe1) / ppe1
-        roe1 = (cfo1 + tax1 - .1 * ppe2) / ppe2
-        roe2 = (cfo2 + tax2 - .1 * ppe3) / ppe3
-        roe3 = (cfo3 + tax3 - .1 * ppe4) / ppe4
-        roe_ave = (roe0 + roe1 + roe2 + roe3)/4
-        print roe0, roe1, roe2, roe3
     except:
-        roe_ave = None
-    list_roe.append (ratio_to_str(roe_ave))
+        cfo0 = None
+        
+    try:
+        cfo1 = list_cfo [1] * units_cashflow
+    except:
+        cfo1 = None
+
+    try:
+        cfo2 = list_cfo [2] * units_cashflow
+    except:
+        cfo2 = None
+
+    try:
+        cfo3 = list_cfo [3] * units_cashflow
+    except:
+        cfo3 = None
+
+    try:
+        cfo4 = list_cfo [4] * units_cashflow
+    except:
+        cfo4 = None
+
+    tax0 = 0
+    tax1 = 0
+    tax2 = 0
+    tax3 = 0
+    tax4 = 0
+
+    try:
+        tax0 = list_tax [0] * units_income
+    except:
+        tax0 = None
+    try:
+        tax1 = list_tax [1] * units_income
+    except:
+        tax1 = None
+    try:
+        tax2 = list_tax [2] * units_income
+    except:
+        tax2 = None
+    try:
+        tax3 = list_tax [3] * units_income
+    except:
+        tax3 = None
+    try:
+        tax4 = list_tax [4] * units_income
+    except:
+        tax4 = None
+
+    ppe0 = 0
+    ppe1 = 0
+    ppe2 = 0
+    ppe3 = 0
+    ppe4 = 0
+
+    try:
+        ppe0 = list_ppe [0] * units_balancesheet
+    except:
+        ppe0 = None
+    try:
+        ppe1 = list_ppe [1] * units_balancesheet
+    except:
+        ppe1 = None
+    try:
+        ppe2 = list_ppe [2] * units_balancesheet
+    except:
+        ppe2 = None
+    try:
+        ppe3 = list_ppe [3] * units_balancesheet
+    except:
+        ppe3 = None
+    try:
+        ppe4 = list_ppe [4] * units_balancesheet
+    except:
+        ppe4 = None
+    
+    roe0 = 0
+    roe1 = 0
+    roe2 = 0
+    roe3 = 0
+    roe_ave = 0
+
+    try:    
+        roe0 = (cfo0 + tax0 - .1 * ppe1) / ppe1
+    except:
+        roe0 = None
+
+    try:
+        roe1 = (cfo1 + tax1 - .1 * ppe2) / ppe2
+    except:
+        roe1 = None
+
+    try:
+        roe2 = (cfo2 + tax2 - .1 * ppe3) / ppe3
+    except:
+        roe2 = None
+
+    try:
+        roe3 = (cfo3 + tax3 - .1 * ppe4) / ppe4
+    except:
+        roe3 = None
+        
+    try:
+        roe_ave = (roe0 + roe1 + roe2 + roe3)/4
+    except:
+        try:
+            roe_ave = (roe0 + roe1 + roe2)/3
+        except:
+            try:
+                roe_ave = (roe0 + roe1)/2
+            except:
+                try:
+                    roe_ave = roe0
+                except:
+                    roe_ave = None
+                
+    list_roe_ave.append (ratio_to_str(roe_ave))
+    list_roe0.append (ratio_to_str(roe0))
+    list_roe1.append (ratio_to_str(roe1))
+    list_roe2.append (ratio_to_str(roe2))
+    list_roe3.append (ratio_to_str(roe3))
+
+    assets0 = 0
+    try:
+        assets0 = list_assets[0] * units_balancesheet / 1E9
+    except:
+        assets0 = None
+    list_assets_smartmoney.append (assets0)
+
+    assets0_alt = 0
+    try:
+        assets0_alt = list_assets_alt[0] * units_balancesheet_alt / 1E9
+    except:
+        assets0_alt = None
+    list_assets_yahoo.append (assets0_alt)
+
+    assets_raio = 0
+    try:
+        assets_ratio = assets0 / assets0_alt
+        print assets_ratio
+    except:
+        assets_ratio = None
+    list_assets_ratio.append (assets_ratio)
+
 
     # this year's projected Dopeler Earnings = last year's PPE * average Dopeler Return On Equity for the last 4 years
     earn = 0
@@ -731,7 +956,7 @@ for symbol in list_symbol:
         earn_ps = earn / nshares
     except:
         earn_ps = None
-    list_eps.append (str(earn_ps))
+    list_eps.append (ratio_to_str(earn_ps))
 
     # Net liquidity per share
     netliqps = 0
@@ -739,8 +964,7 @@ for symbol in list_symbol:
         netliqps = netliq / nshares
     except:
         netliqps = None
-    print symbol, netliqps
-    list_netliq_ps.append (str(netliqps))
+    list_netliq_ps.append (ratio_to_str(netliqps))
 
     # Intrinsic value per share
     intrinsic_ps = 0
@@ -748,7 +972,7 @@ for symbol in list_symbol:
         intrinsic_ps = 10 * earn_ps + netliqps
     except:
         intrinsic_ps = None
-    list_intrinsic_ps.append (str(intrinsic_ps))
+    list_intrinsic_ps.append (ratio_to_str(intrinsic_ps))
 
     # Price
     price = list_price [i_stock]
@@ -757,6 +981,8 @@ for symbol in list_symbol:
     pb = 0
     try:
         pb = price/intrinsic_ps
+        if intrinsic_ps < 0:
+            pb = None
     except:
         pb = None
     list_pb.append (ratio_to_str(pb))
@@ -765,6 +991,8 @@ for symbol in list_symbol:
     pe = 0
     try:
         pe = (price - netliqps) / earn_ps
+        if earn_ps < 0:
+            pe = None
     except:
         pe = None
     list_pe.append (ratio_to_str(pe))
@@ -773,6 +1001,8 @@ for symbol in list_symbol:
     yld = 0
     try:
         yld = earn_ps / (price - netliqps)
+        if earn_ps < 0:
+            yld = None
     except:
          yld = None
     list_yield.append (ratio_to_str(yld))
@@ -787,7 +1017,7 @@ for symbol in list_symbol:
     print "Analysis completion: " + str(i_stock) + '/' + str(i_stock_max) + "; Minutes remaining: " + str(remain_m)
 
 #########################################
-# PART 5: PRINT THE RESULTS TO A CSV FILE
+# PART 6: PRINT THE RESULTS TO A CSV FILE
 #########################################
 
 i_stock = 0
@@ -799,7 +1029,7 @@ with open(filename_output, 'w') as csvfile:
     h1 = 'Symbol'
     h2 = 'Name'
     h3 = 'Price'
-    h4 = 'Dopeler ROE'
+    h4 = 'Dopeler ROE (Ave.)'
     h5 = 'Dopeler PB'
     h6 = 'Dopeler PE'
     h7 = 'Dopeler Yield'
@@ -808,13 +1038,19 @@ with open(filename_output, 'w') as csvfile:
     h10 = 'Net Liquidity/Share'
     h11 = 'Sector'
     h12 = 'Industry'
+    h13 = 'Dopeler ROE (Y1)'
+    h14 = 'Dopeler ROE (Y2)'
+    h15 = 'Dopeler ROE (Y3)'
+    h16 = 'Dopeler ROE (Y4)'
+    h17 = 'Assets (billions, SmartMoney)'
+    h18 = 'Assets (billions, Yahoo)'
 
-    resultswriter.writerow ([h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12])
+    resultswriter.writerow ([h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18])
     while i_stock <= i_stock_max:
         c1 = list_symbol [i_stock]
         c2 = list_name [i_stock]
         c3 = list_price [i_stock]
-        c4 = list_roe [i_stock]
+        c4 = list_roe_ave [i_stock]
         c5 = list_pb [i_stock]
         c6 = list_pe [i_stock]
         c7 = list_yield [i_stock]
@@ -823,7 +1059,13 @@ with open(filename_output, 'w') as csvfile:
         c10 = list_netliq_ps [i_stock]
         c11 = list_sector [i_stock]
         c12 = list_industry [i_stock]
-        resultswriter.writerow([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12])
+        c13 = list_roe0 [i_stock]
+        c14 = list_roe1 [i_stock]
+        c15 = list_roe2 [i_stock]
+        c16 = list_roe3 [i_stock]
+        c17 = list_assets_smartmoney [i_stock]
+        c18 = list_assets_yahoo [i_stock]
+        resultswriter.writerow([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18])
         i_stock = i_stock + 1
     
 
