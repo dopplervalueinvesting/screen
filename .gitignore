@@ -1,0 +1,6 @@
+*.csv#
+downloads/*
+output/*
+input/companylist-amex.csv
+input/companylist-nasdaq.csv
+input/companylist-nyse.csv

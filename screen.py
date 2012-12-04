@@ -28,12 +28,10 @@ import re
 import math
 import csv
 
-dir_analysis = os.getcwd()
-os.chdir('..')
-dir_doppler = os.getcwd()
-dir_input = dir_doppler + '/screen-input'
-dir_output = dir_doppler + '/screen-output'
-os.chdir(dir_analysis)
+dir_screen = os.getcwd()
+dir_input = dir_screen + '/input'
+dir_downloads = dir_screen + '/downloads'
+dir_output = dir_screen + '/output'
 
 ######################################################################################
 # PART 1: DOWNLOAD THE LISTS OF AMEX, NYSE, AND NASDAQ STOCKS FROM THE NASDAQ WEB SITE
@@ -481,7 +479,7 @@ print "*********************************"
 # Getting financial figures from CNBC (more data than Yahoo, capable of handling big loads)
 URL_BASE_SMARTMONEY = 'http://www.smartmoney.com/quote/'
 URL_BASE_YAHOO = "http://finance.yahoo.com/q/"
-LOCAL_BASE = dir_doppler + '/screen-downloads'
+LOCAL_BASE = dir_downloads
 
 # Smart Money URL for balance sheet data
 def url_balancesheet (symbol1):
@@ -1165,6 +1163,7 @@ def percent_tenth (num_input):
 
 i_stock = 0
 i_stock_max = len (list_symbol) -1
+create_dir (dir_output) # Create output directory if it does not already exist
 filename_output = dir_output + "/results.csv"
 
 with open(filename_output, 'w') as csvfile:
