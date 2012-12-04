@@ -25,6 +25,7 @@ import socket
 import urllib
 import lxml.html
 import re
+import math
 import csv
 
 dir_analysis = os.getcwd()
@@ -638,17 +639,6 @@ def get_units (string_html):
     else:
         return None
 
-# Purpose: Convert a number into a string, "<0" if negative, "N/A" if None; used for valuation ratios
-# Input: number
-# Output: string
-def ratio_to_str (num_input):
-    str_output = ''
-    if num_input == None:
-        str_output = 'N/A'
-    else:
-        str_output = str(num_input)
-    return str_output
-
 list_roe_ave = []
 list_roe0 = []
 list_roe1 = []
@@ -660,6 +650,10 @@ list_intrinsic_ps = []
 list_assets_smartmoney = []
 list_assets_yahoo = []
 list_assets_ratio = []
+list_rev_smartmoney = []
+list_rev_yahoo = []
+list_rev_ratio = []
+list_diff_db = []
 list_pe = []
 list_yield = []
 list_pb = []
@@ -691,23 +685,18 @@ for symbol in list_symbol:
 
         list_row = doc.xpath(u'.//th[div[contains (text(), "Cash & Short Term Investments")]]/following-sibling::td/text()')
         list_cash = clean_list (list_row)
-        print list_cash
 
         list_row = doc.xpath(u'.//th[div[contains (text(), "Property, Plant & Equipment - Gross")]]/following-sibling::td/text()')
         list_ppe = clean_list (list_row)
-        print list_ppe
 
         list_row = doc.xpath(u'.//th[div[contains (text(), "Total Liabilities")]]/following-sibling::td/text()')
         list_liab = clean_list (list_row)
-        print list_liab
 
         list_row = doc.xpath(u'.//th[div[contains (text(), "Preferred Stock (Carrying Value)")]]/following-sibling::td/text()')
         list_ps = clean_list (list_row)
-        print list_ps
 
         list_row = doc.xpath(u'.//th[div[contains (text(), "Total Assets")]]/following-sibling::td/text()')
         list_assets = clean_list (list_row)
-        print list_assets
 
     except:
         print "Balance sheet data not found"
@@ -750,6 +739,7 @@ for symbol in list_symbol:
 
     # PARSE DATA FROM INCOME STATEMENT
     list_tax = [] # Income tax expense
+    list_rev = [] # Revenue
     units_income = 0
     
     try:
@@ -763,8 +753,30 @@ for symbol in list_symbol:
 
         list_row = doc.xpath(u'.//th[div[contains (text(), "Income Tax")]]/following-sibling::td/text()')
         list_tax = clean_list (list_row)
+
+        list_row = doc.xpath(u'.//th[div[contains (text(), "Sales/Revenue")]]/following-sibling::td/text()')
+        list_rev = clean_list (list_row)
     except:
         print "Income statement data not found"
+
+    # PARSE DATA FROM INCOME SHEET (YAHOO)
+    list_rev_alt = []
+    units_rev_alt = 0
+    try:
+        url_local = local_income_yahoo (symbol)
+        url_local = "file://" + url_local
+        result = urllib.urlopen(url_local)
+        element_html = result.read()
+        doc = lxml.html.document_fromstring (element_html)
+
+        units_income_alt = get_units (element_html)
+
+        list_row = doc.xpath(u'.//td[strong[contains (text(),"Total Revenue")]]/following-sibling::td/strong/text()') 
+        list_rev_alt = clean_list (list_row)
+
+    except:
+        print "Yahoo Finance balance sheet data not found"
+
 
     # last year's PPE (at end of year) = PPE at the start of this year
     # this year's pre-tax free cash flow = This year's after-tax free cash flow + this year's income taxes
@@ -902,11 +914,11 @@ for symbol in list_symbol:
                 except:
                     roe_ave = None
                 
-    list_roe_ave.append (ratio_to_str(roe_ave))
-    list_roe0.append (ratio_to_str(roe0))
-    list_roe1.append (ratio_to_str(roe1))
-    list_roe2.append (ratio_to_str(roe2))
-    list_roe3.append (ratio_to_str(roe3))
+    list_roe_ave.append (roe_ave)
+    list_roe0.append (roe0)
+    list_roe1.append (roe1)
+    list_roe2.append (roe2)
+    list_roe3.append (roe3)
 
     assets0 = 0
     try:
@@ -922,14 +934,37 @@ for symbol in list_symbol:
         assets0_alt = None
     list_assets_yahoo.append (assets0_alt)
 
-    assets_raio = 0
+    assets_ratio = 0
     try:
-        assets_ratio = assets0 / assets0_alt
-        print assets_ratio
+        assets_ratio = 10 * math.log10 (assets0 / assets0_alt) # dB
     except:
         assets_ratio = None
     list_assets_ratio.append (assets_ratio)
 
+    rev0 = 0
+    try:
+        rev0 = list_rev[0] * units_income / 1E9
+    except:
+        rev0 = None
+    list_rev_smartmoney.append (rev0)
+
+    rev0_alt = 0
+    try:
+        rev0_alt = list_rev_alt[0] * units_income_alt / 1E9
+    except:
+        rev0_alt = None
+    list_rev_yahoo.append (rev0_alt)
+
+    rev_ratio = 0
+    diff_db = -1000
+    try:
+        rev_ratio = 10 * math.log10 (rev0 / rev0_alt) # dB
+        diff_db = abs (assets_ratio) + abs (rev_ratio) # dB
+    except:
+        rev_ratio = None
+        diff_db = None
+    list_rev_ratio.append (rev_ratio)
+    list_diff_db.append (diff_db)
 
     # this year's projected Dopeler Earnings = last year's PPE * average Dopeler Return On Equity for the last 4 years
     earn = 0
@@ -956,7 +991,7 @@ for symbol in list_symbol:
         earn_ps = earn / nshares
     except:
         earn_ps = None
-    list_eps.append (ratio_to_str(earn_ps))
+    list_eps.append (earn_ps)
 
     # Net liquidity per share
     netliqps = 0
@@ -964,7 +999,7 @@ for symbol in list_symbol:
         netliqps = netliq / nshares
     except:
         netliqps = None
-    list_netliq_ps.append (ratio_to_str(netliqps))
+    list_netliq_ps.append (netliqps)
 
     # Intrinsic value per share
     intrinsic_ps = 0
@@ -972,7 +1007,7 @@ for symbol in list_symbol:
         intrinsic_ps = 10 * earn_ps + netliqps
     except:
         intrinsic_ps = None
-    list_intrinsic_ps.append (ratio_to_str(intrinsic_ps))
+    list_intrinsic_ps.append (intrinsic_ps)
 
     # Price
     price = list_price [i_stock]
@@ -985,7 +1020,7 @@ for symbol in list_symbol:
             pb = None
     except:
         pb = None
-    list_pb.append (ratio_to_str(pb))
+    list_pb.append (pb)
 
     # Dopeler PE
     pe = 0
@@ -995,7 +1030,7 @@ for symbol in list_symbol:
             pe = None
     except:
         pe = None
-    list_pe.append (ratio_to_str(pe))
+    list_pe.append (pe)
 
     # Dopeler Yield
     yld = 0
@@ -1005,7 +1040,7 @@ for symbol in list_symbol:
             yld = None
     except:
          yld = None
-    list_yield.append (ratio_to_str(yld))
+    list_yield.append (yld)
 
 
     i_stock = i_stock + 1
@@ -1016,56 +1051,67 @@ for symbol in list_symbol:
     remain_m = int (round(remain_s/60))
     print "Analysis completion: " + str(i_stock) + '/' + str(i_stock_max) + "; Minutes remaining: " + str(remain_m)
 
-#########################################
-# PART 6: PRINT THE RESULTS TO A CSV FILE
-#########################################
+######################################################
+# PART 6: PRINT THE RESULTS (UNFILTERED) TO A CSV FILE
+######################################################
 
 i_stock = 0
 i_stock_max = len (list_symbol) -1
-filename_output = dir_output + "/results.csv"
+filename_output = dir_output + "/results-unfiltered.csv"
 
 with open(filename_output, 'w') as csvfile:
     resultswriter = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
     h1 = 'Symbol'
     h2 = 'Name'
     h3 = 'Price'
-    h4 = 'Dopeler ROE (Ave.)'
-    h5 = 'Dopeler PB'
-    h6 = 'Dopeler PE'
-    h7 = 'Dopeler Yield'
-    h8 = 'Intrinsic Value'
-    h9 = 'Dopeler EPS'
-    h10 = 'Net Liquidity/Share'
+    h4 = 'Dopeler\nROE\n(Ave.)'
+    h5 = 'Dopeler\nP/B'
+    h6 = 'Dopeler\nPE'
+    h7 = 'Dopeler\nYield'
+    h8 = 'Dopeler\nBook\nValue'
+    h9 = 'Dopeler\nEPS'
+    h10 = 'Net\nLiquidity/Share'
     h11 = 'Sector'
     h12 = 'Industry'
-    h13 = 'Dopeler ROE (Y1)'
-    h14 = 'Dopeler ROE (Y2)'
-    h15 = 'Dopeler ROE (Y3)'
-    h16 = 'Dopeler ROE (Y4)'
-    h17 = 'Assets (billions, SmartMoney)'
-    h18 = 'Assets (billions, Yahoo)'
+    h13 = 'Assets\n(billions,\nSmartMoney)'
+    h14 = 'Assets\n(billions,\nYahoo)'
+    h15 = 'Revenue\n(billions,\nSmartMoney)'
+    h16 = 'Revenue\n(billions,\nYahoo)'
+    h17 = 'Assets\nRatio\n(dB)'
+    h18 = 'Revenue\nRatio\n(dB)'
+    h19 = 'Total\nDiff.\n(dB)'
+    h20 = 'Dopeler\nROE (Y1)'
+    h21 = 'Dopeler\nROE (Y2)'
+    h22 = 'Dopeler\nROE (Y3)'
+    h23 = 'Dopeler\nROE (Y4)'
 
-    resultswriter.writerow ([h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18])
+    resultswriter.writerow ([h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19, h20, h21, h22, h23])
     while i_stock <= i_stock_max:
         c1 = list_symbol [i_stock]
         c2 = list_name [i_stock]
-        c3 = list_price [i_stock]
-        c4 = list_roe_ave [i_stock]
-        c5 = list_pb [i_stock]
-        c6 = list_pe [i_stock]
-        c7 = list_yield [i_stock]
-        c8 = list_intrinsic_ps [i_stock]
-        c9 = list_eps [i_stock]
-        c10 = list_netliq_ps [i_stock]
+        c3 = str (list_price [i_stock])
+        c4 = str (list_roe_ave [i_stock])
+        c5 = str (list_pb [i_stock])
+        c6 = str (list_pe [i_stock])
+        c7 = str (list_yield [i_stock])
+        c8 = str (list_intrinsic_ps [i_stock])
+        c9 = str (list_eps [i_stock])
+        c10 = str( list_netliq_ps [i_stock])
         c11 = list_sector [i_stock]
         c12 = list_industry [i_stock]
-        c13 = list_roe0 [i_stock]
-        c14 = list_roe1 [i_stock]
-        c15 = list_roe2 [i_stock]
-        c16 = list_roe3 [i_stock]
-        c17 = list_assets_smartmoney [i_stock]
-        c18 = list_assets_yahoo [i_stock]
-        resultswriter.writerow([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18])
+        c13 = str (list_assets_smartmoney [i_stock])
+        c14 = str (list_assets_yahoo [i_stock])
+        c15 = str (list_rev_smartmoney [i_stock])
+        c16 = str (list_rev_yahoo [i_stock])
+        c17 = str (list_assets_ratio [i_stock])
+        c18 = str (list_rev_ratio [i_stock])
+        c19 = str (list_diff_db [i_stock])
+        c20 = str (list_roe0 [i_stock])
+        c21 = str (list_roe1 [i_stock])
+        c22 = str (list_roe2 [i_stock])
+        c23 = str (list_roe3 [i_stock])
+        
+        resultswriter.writerow([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23])
         i_stock = i_stock + 1
     
 
