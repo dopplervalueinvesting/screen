@@ -1123,7 +1123,6 @@ def dec_thou (num_input):
     str_output = ''
     try:
         str_output = '{0:.3f}'.format(num_input)
-        print str_output
     except:
         str_output = 'N/A'
     return str_output
