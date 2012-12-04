@@ -76,16 +76,13 @@ def download_page (url, file_name, file_age_max_hours):
         file_size = 0
     n_fail = 0
     n_fail_max = 2
-    time.sleep (random.uniform (.1, .2)) # Delay is needed to limit the impact on the upstream server
     while ((file_age > file_age_max_hours or file_size == 0) and n_fail <= n_fail_max):
         try:
-            signal.signal(signal.SIGALRM, timeout_handler) 
-            signal.alarm (10) # Trigger alarm in 10 seconds
             f = urllib2.urlopen (url)
             local_file = open (file_name, 'w') # Open local file
             local_file.write (f.read())
             local_file.close ()
-            signal.alarm(0) # Disable the alarm
+            time.sleep (random.uniform (.1, .2)) # Delay is needed to limit the impact on the upstream server
             break # Script hangs without this command
         except urllib2.HTTPError, e:
             n_fail = n_fail + 1
@@ -456,7 +453,7 @@ list_industry = Exchange1.industry_selected ()
 # END: this section is for testing purposes
 
 # BEGIN: enable this section for analyzing all AMEX, NYSE, and NASDAQ stocks
-"""
+
 Exchange1 = Exchange ('amex')
 Exchange2 = Exchange ('nasdaq')
 Exchange3 = Exchange ('nyse')
@@ -467,7 +464,7 @@ list_price = Exchange1.price_selected () + Exchange2.price_selected () + Exchang
 list_nshares = Exchange1.nshares_selected () + Exchange2.nshares_selected () + Exchange3.nshares_selected ()
 list_sector = Exchange1.sector_selected () + Exchange2.sector_selected () + Exchange3.sector_selected ()
 list_industry = Exchange1.industry_selected () + Exchange2.industry_selected () + Exchange3.industry_selected ()
-"""
+
 # END: enable this section for analyzing all AMEX, NYSE, and NASDAQ stocks
 
 num_stocks = len (list_symbol)
@@ -1114,16 +1111,109 @@ with open(filename_output, 'w') as csvfile:
         resultswriter.writerow([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23])
         i_stock = i_stock + 1
     
+####################################################
+# PART 6: PRINT THE RESULTS (FILTERED) TO A CSV FILE
+####################################################
+# Exclude the following in the filtered results:
+# "N/A" for every quantitative parameter
+# Excessive discrepancies between the Smartmoney figures and the Yahoo Finance figures for assets and revenues
 
+# Round a number to the nearest thousandth, convert to a string
+# Input: number
+# Output: string
+def dec_thou (num_input):
+    str_output = ''
+    try:
+        str_output = '{0:.3f}'.format(num_input)
+        print str_output
+    except:
+        str_output = 'N/A'
+    return str_output
 
+# Round a number to the nearest hundredth, convert to a string
+# Input: number
+# Output: string
+def dec_hund (num_input):
+    str_output = ''
+    try:
+        str_output = '{0:.2f}'.format(num_input)
+    except:
+        str_output = 'N/A'
+    return str_output
 
+# Round a number to the nearest tenth, convert to a string
+# Input: number
+# Output: string
+def dec_tenth (num_input):
+    str_output = ''
+    try:
+        str_output = '{0:.1f}'.format(num_input)
+    except:
+        str_output = 'N/A'
+    return str_output
 
+# Round a number to the nearest .1%, convert to a string
+# Input: number
+# Output: string
+def percent_tenth (num_input):
+    str_output = ''
+    try:
+        str_output = '{0:.1%}'.format(num_input)
+    except:
+        str_output = 'N/A'
+    return str_output
 
+i_stock = 0
+i_stock_max = len (list_symbol) -1
+filename_output = dir_output + "/results.csv"
 
+with open(filename_output, 'w') as csvfile:
+    resultswriter = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+    h1 = 'Symbol'
+    h2 = 'Name'
+    h3 = 'Price'
+    h4 = 'Dopeler\nROE\n(Ave.)'
+    h5 = 'Dopeler\nP/B'
+    h6 = 'Dopeler\nPE'
+    h7 = 'Dopeler\nYield'
+    h8 = 'Dopeler\nBook\nValue'
+    h9 = 'Dopeler\nEPS'
+    h10 = 'Net\nLiquidity/Share'
+    h11 = 'Sector'
+    h12 = 'Industry'
+    h13 = 'Dopeler\nROE (Y1)'
+    h14 = 'Dopeler\nROE (Y2)'
+    h15 = 'Dopeler\nROE (Y3)'
+    h16 = 'Dopeler\nROE (Y4)'
+    resultswriter.writerow ([h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16])
+    while i_stock <= i_stock_max:
+        roe_ave = list_roe_ave [i_stock] # Dopeler ROE
+        pb = list_pb [i_stock] # Dopeler Price/Book
+        pe = list_pe [i_stock] # Dopeler PE
+        yld = list_yield [i_stock] # Dopeler yield
+        bv = list_intrinsic_ps [i_stock] # Dopeler Book Value (estimated intrinsic value)
+        eps = list_eps [i_stock] # Dopeler Earnings Per Share
+        netliq = list_netliq_ps [i_stock] # Net liquidity per share
+        diff_db = list_diff_db [i_stock]
 
-
-
-
-
-
-
+        any_values = any ([roe_ave, pb, pe, yld, bv, eps, netliq])
+        if any_values == True and diff_db < 1:
+            c1 = list_symbol [i_stock]
+            c2 = list_name [i_stock]
+            c3 = dec_hund (list_price [i_stock])
+            c4 = percent_tenth (list_roe_ave [i_stock])
+            c5 = dec_hund (list_pb [i_stock])
+            c6 = dec_tenth (list_pe [i_stock])
+            c7 = percent_tenth (list_yield [i_stock])
+            c8 = dec_hund (list_intrinsic_ps [i_stock])
+            c9 = dec_thou (list_eps [i_stock])
+            c10 = dec_hund( list_netliq_ps [i_stock])
+            c11 = list_sector [i_stock]
+            c12 = list_industry [i_stock]
+            c13 = percent_tenth (list_roe0 [i_stock])
+            c14 = percent_tenth (list_roe1 [i_stock])
+            c15 = percent_tenth (list_roe2 [i_stock])
+            c16 = percent_tenth (list_roe3 [i_stock])
+        
+            resultswriter.writerow([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16])
+        i_stock = i_stock + 1
