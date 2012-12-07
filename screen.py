@@ -659,7 +659,8 @@ for symbol in list_symbol:
     print "Analyzing " + symbol
 
     # SPECIAL THANKS to root on stackoverflow.com for help on how to parse a row from the Smartmoney pages.
-    # SPECIAL THANKS to MRAB on comp.lang.python for help on how to parse a row from the Yahoo Finance pages.
+    # SPECIAL THANKS to MRAB on comp.lang.python and soulseekah on stackoverflow.com for help on how to parse a 
+    # row from the Yahoo Finance pages.
 
     # PARSE DATA FROM BALANCE SHEET
     list_cash = []
